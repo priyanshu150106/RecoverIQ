@@ -1,0 +1,83 @@
+export interface DashboardMetrics {
+  total_revenue_processed: number; // in paise
+  revenue_at_risk: number; // in paise
+  recovery_rate: number; // percentage (0 - 100)
+  cases_detected: number;
+  recovered_revenue: number; // in paise
+  potential_recovery: number; // in paise
+  active_cases_count: number;
+  recovered_cases_count: number;
+}
+
+export interface CustomerInfo {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  total_transactions: number;
+  successful_transactions: number;
+  failed_transactions: number;
+  total_paid: number; // in paise
+  created_at: string;
+}
+
+export interface PaymentEventInfo {
+  id: number;
+  customer_id: number;
+  event_type: string;
+  amount: number; // in paise
+  currency: string;
+  status: string;
+  failure_reason?: string | null;
+  external_event_id?: string | null;
+  created_at: string;
+  customer?: CustomerInfo;
+}
+
+export interface RecoveryActionItem {
+  id: number;
+  recovery_case_id: number;
+  action_type: string;
+  status: string;
+  external_reference?: string | null;
+  created_at: string;
+}
+
+export interface RecoveryCaseItem {
+  id: number;
+  customer_id: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string | null;
+  amount: number; // in paise
+  currency: string;
+  event_type: string;
+  failure_reason?: string | null;
+  risk_score: number; // 0 to 100
+  recovery_probability: number; // 0.0 to 1.0
+  recommended_action: string;
+  confidence: number; // 0.0 to 1.0
+  status: string;
+  created_at: string;
+}
+
+export interface RecoveryCaseDetail {
+  id: number;
+  customer_id: number;
+  payment_event_id: number;
+  risk_score: number;
+  recovery_probability: number;
+  recommended_action: string;
+  confidence: number;
+  status: string;
+  created_at: string;
+  customer: CustomerInfo;
+  payment_event: PaymentEventInfo;
+  recovery_actions: RecoveryActionItem[];
+  scoring_breakdown?: {
+    category?: string;
+    customer_history?: string;
+    amount_context?: string;
+    model?: string;
+  } | null;
+}

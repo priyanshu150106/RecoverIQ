@@ -1,64 +1,54 @@
 # RecoverIQ Architecture & Safety Specification
 
-## 1. System Pipeline Overview
-
-RecoverIQ processes revenue leakages through an 8-stage pipeline:
+## 1. Stage 2 Data Pipeline Overview
 
 ```
-1. Razorpay Event Ingestion (Webhooks / Test APIs)
+Raw Ingestion (POST /api/events or Webhooks)
    │
-2. Event Normalization
-   │ - Maps heterogeneous Razorpay payloads into unified RecoverIQ Event schemas
+   ▼
+[EventNormalizer] ─── Standardizes to NormalizedEvent schema (Independent of gateway)
    │
-3. Revenue Risk Engine
-   │ - Assesses risk magnitude, merchant exposure, customer payment history
+   ▼
+[EventIngestionService]
+   ├── Deduplication Check (on external_event_id)
+   ├── Customer Resolution (Find existing or create new Customer profile)
+   ├── PaymentEvent Persistence (amount in paise, status, reason)
    │
-4. AI Recovery Agent
-   │ - Evaluates root failure causes (e.g., card expiry, bank downtime, auth timeout)
-   │ - Generates structured recommendations (NEVER executes actions directly)
+   ▼ (if at-risk: payment.failed, payment_link.expired, etc.)
+[RecoveryScorer] ──── Deterministic baseline heuristics (History, Amount, Failure Type)
    │
-5. Deterministic Policy Engine
-   │ - Validates recovery action against strict hard limits:
-   │   • Max discount limits
-   │   • Cooldown periods between retries
-   │   • Maximum automated value threshold
-   │   • Blacklists and merchant preferences
+   ▼
+[RecoveryCase & RecoveryAction Persistence]
    │
-6. Execution Gate (Human Approval vs. Safe Auto-Execution)
-   │ - High-risk or low-confidence actions require human merchant approval
-   │ - Low-risk policy-compliant actions are approved for auto-execution
+   ▼
+[FastAPI Endpoints] ─ GET /api/dashboard/metrics & GET /api/recovery-cases
    │
-7. Razorpay Test API Execution
-   │ - Dispatches approved recovery payload (e.g. regenerative payment link, smart retry)
-   │
-8. Audit Trail & Real-Time Analytics
-   │ - Persists immutable log of event, AI reasoning, policy checks, and execution outcome
+   ▼
+[Next.js Dashboard] ─ Live Recovery Queue, Metric Cards, Diagnostic Modals
 ```
 
-## 2. Structured AI Recommendation Schema
+## 2. Deterministic Baseline Scoring Heuristics
 
-The AI Agent is strictly confined to outputting JSON adhering to this structure:
+The Stage 2 scoring baseline uses transparent mathematical and rule-based evaluation:
 
-```json
-{
-  "event_id": "evt_123456",
-  "risk_score": 0.85,
-  "recovery_probability": 0.72,
-  "reason": "Customer payment failed due to issuing bank 3DS timeout on credit card.",
-  "recommended_action": "SEND_RETRY_LINK_WITH_UPI_ALTERNATIVE",
-  "confidence": 0.91,
-  "requires_approval": false,
-  "action_payload": {
-    "expiry_hours": 24,
-    "suggest_alternative_payment_method": "upi"
-  }
-}
-```
+1. **Failure Category Base Assessment**:
+   - `Temporary Bank / Network Glitch` (e.g. `bank_authorization_timeout`): Risk: 28, Prob: 0.88, Action: `SEND_SMART_RETRY_LINK`
+   - `Payment Link Expiry` (`payment_link_ttl_expired`): Risk: 42, Prob: 0.72, Action: `EXTEND_PAYMENT_LINK_24H`
+   - `Partial Payment` (`payment_link.partially_paid`): Risk: 20, Prob: 0.92, Action: `SCHEDULE_WHATSAPP_REMINDER`
+   - `Insufficient Balance`: Risk: 58, Prob: 0.58, Action: `FALLBACK_UPI_INTENT`
+   - `Card Rejection` (`card_expired`, `card_declined`): Risk: 68, Prob: 0.45, Action: `SEND_UPDATE_PAYMENT_METHOD_LINK`
+   - `Fraud / High Velocity Flag`: Risk: 92, Prob: 0.10, Action: `FLAG_MANUAL_REVIEW`
 
-## 3. Deterministic Safety Policies
+2. **Customer Historical Profile Adjustments**:
+   - Loyal customer (>= 2 successes, >= 75% success rate): Risk -12, Prob +0.12
+   - Repeat failure history (>= 2 failures, < 40% success rate): Risk +16, Prob -0.15
 
-Policies override the AI in all circumstances:
-- **Maximum Retries**: No customer is contacted more than 3 times for a single invoice.
-- **Value Safeguard**: Any recovery action with monetary impact > ₹50,000 requires explicit human approval.
-- **Cooldown Window**: Minimum 6 hours between automated reminders.
-- **Test Mode Isolation**: In development, all actions strictly target Razorpay Test Mode.
+3. **Amount Bracket Modifiers**:
+   - Low-ticket (< ₹1,500): Prob +0.05
+   - High-ticket (> ₹20,000): Risk +8, Action: `OFFER_FLEXIBLE_PAYMENT_OPTION`
+
+---
+
+## 3. Synthetic Data Safeguard
+
+All seed datasets and simulated events operate in isolation with zero external API calls to Razorpay or OpenAI in Stages 1 and 2.
