@@ -2,6 +2,7 @@ import {
   DashboardMetrics,
   RecoveryCaseItem,
   RecoveryCaseDetail,
+  ExecuteLinkResponse,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -42,6 +43,26 @@ export async function fetchRecoveryCaseDetail(
     );
   }
   return res.json();
+}
+
+export async function executePaymentLink(
+  caseId: number,
+  expireHours: number = 24
+): Promise<ExecuteLinkResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/recovery-cases/${caseId}/execute-link`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expire_hours: expireHours }),
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Execution failed with HTTP ${res.status}`);
+  }
+  return data;
 }
 
 export async function ingestEvent(payload: Record<string, any>): Promise<any> {

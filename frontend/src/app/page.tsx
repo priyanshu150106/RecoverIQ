@@ -170,7 +170,7 @@ export default function DashboardPage() {
               </p>
             </div>
             <span className="text-xs text-emerald-400 font-mono font-semibold">
-              Stages 1 & 2 Active
+              Stage 3A Active (Razorpay Test Mode)
             </span>
           </div>
 
@@ -204,7 +204,7 @@ export default function DashboardPage() {
                 <Shield className="h-4 w-4" />
               </div>
               <span className="text-xs font-semibold text-emerald-300">4. Policy Engine</span>
-              <p className="text-[11px] text-slate-400">Hard limits & auto-action validation (Stage 3).</p>
+              <p className="text-[11px] text-slate-400">Hard limits & auto-action validation (Stage 3A).</p>
             </div>
 
             <div className="rounded-xl bg-slate-800/80 border border-slate-700/60 p-4 flex flex-col items-start space-y-2">
@@ -212,7 +212,7 @@ export default function DashboardPage() {
                 <History className="h-4 w-4" />
               </div>
               <span className="text-xs font-semibold text-slate-200">5. Execution & Audit</span>
-              <p className="text-[11px] text-slate-400">Razorpay Test execution & audit trail (Stage 5).</p>
+              <p className="text-[11px] text-slate-400">Razorpay Test execution & audit trail (Stage 3A).</p>
             </div>
           </div>
         </div>
@@ -222,10 +222,11 @@ export default function DashboardPage() {
       <CaseDetailModal
         caseId={selectedCaseId}
         onClose={() => setSelectedCaseId(null)}
+        onCaseUpdated={loadData}
       />
 
       <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>RecoverIQ • AI Revenue Recovery Agent for Razorpay Merchants • Hackathon Edition (Stage 2 Synthetic Data)</p>
+        <p>RecoverIQ • AI Revenue Recovery Agent for Razorpay Merchants • Hackathon Edition (Stage 3A Active)</p>
       </footer>
     </div>
   );

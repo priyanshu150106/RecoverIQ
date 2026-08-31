@@ -14,26 +14,42 @@ import {
   ArrowRight,
   Info,
   Loader2,
+  ExternalLink,
+  Copy,
+  Check,
+  Zap,
 } from "lucide-react";
 import { RecoveryCaseDetail } from "@/types/api";
-import { fetchRecoveryCaseDetail, formatINR } from "@/services/api";
+import {
+  fetchRecoveryCaseDetail,
+  executePaymentLink,
+  formatINR,
+} from "@/services/api";
 
 interface CaseDetailModalProps {
   caseId: number | null;
   onClose: () => void;
+  onCaseUpdated?: () => void;
 }
 
-export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
+export function CaseDetailModal({
+  caseId,
+  onClose,
+  onCaseUpdated,
+}: CaseDetailModalProps) {
   const [detail, setDetail] = useState<RecoveryCaseDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [executing, setExecuting] = useState<boolean>(false);
+  const [execError, setExecError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!caseId) return;
+  const loadCase = (id: number) => {
     setLoading(true);
     setError(null);
+    setExecError(null);
 
-    fetchRecoveryCaseDetail(caseId)
+    fetchRecoveryCaseDetail(id)
       .then((data) => {
         setDetail(data);
       })
@@ -43,9 +59,43 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
       .finally(() => {
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    if (!caseId) return;
+    loadCase(caseId);
   }, [caseId]);
 
+  const handleGenerateLink = async () => {
+    if (!caseId) return;
+    setExecuting(true);
+    setExecError(null);
+
+    try {
+      await executePaymentLink(caseId);
+      loadCase(caseId);
+      if (onCaseUpdated) {
+        onCaseUpdated();
+      }
+    } catch (err: any) {
+      setExecError(err.message || "Failed to generate Razorpay payment link.");
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const handleCopyLink = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
   if (!caseId) return null;
+
+  // Check if a payment link has already been executed for this case
+  const activeLinkAction = detail?.recovery_actions?.find(
+    (a) => a.action_type === "CREATE_PAYMENT_LINK" && a.status === "EXECUTED" && a.payment_link_url
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
@@ -76,7 +126,7 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">Diagnostic Breakdown & Recovery Strategy</p>
+              <p className="text-xs text-slate-400">Diagnostic Breakdown & Recovery Actions</p>
             </div>
           </div>
 
@@ -102,20 +152,70 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
             </div>
           ) : (
             <>
-              {/* Notice Banner: Stage 2 Baseline vs Stage 4 AI */}
-              <div className="flex items-start space-x-3 p-4 rounded-xl bg-blue-950/40 border border-blue-800/40 text-blue-200">
-                <Info className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1">
-                  <p className="font-semibold text-blue-300">
-                    Deterministic Baseline Engine (Stage 2)
-                  </p>
-                  <p className="text-slate-300">
-                    This case is evaluated using deterministic rules based on customer purchase history, amount brackets, and failure codes. Full multimodal AI reasoning (Gemini Agent) and autonomous policy verification will be integrated in Stage 4.
-                  </p>
-                </div>
-              </div>
+              {/* Active Razorpay Payment Link Card (if generated) */}
+              {activeLinkAction?.payment_link_url && (
+                <div className="rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-4 w-4 text-emerald-400" />
+                      <h4 className="text-sm font-bold text-white">
+                        Razorpay Test Payment Link Active
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      {activeLinkAction.payment_link_id}
+                    </span>
+                  </div>
 
-              {/* Grid: Customer & Payment Event */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                    <span className="font-mono text-xs text-slate-300 truncate max-w-[340px]">
+                      {activeLinkAction.payment_link_url}
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleCopyLink(activeLinkAction.payment_link_url!)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center space-x-1"
+                        title="Copy Link"
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-3.5 w-3.5 text-emerald-400" />
+                            <span className="text-emerald-400 text-[11px]">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span className="text-[11px]">Copy</span>
+                          </>
+                        )}
+                      </button>
+
+                      <a
+                        href={activeLinkAction.payment_link_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition-colors shadow-lg shadow-emerald-600/20"
+                      >
+                        <span>Open Test Checkout</span>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Execution Error Banner */}
+              {execError && (
+                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start space-x-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Action Blocked / Failed</p>
+                    <p className="mt-0.5 text-slate-300">{execError}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Grid: Customer Profile & Payment Event */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Customer Profile */}
                 <div className="rounded-xl bg-slate-800/60 border border-slate-700/60 p-4 space-y-3">
@@ -213,13 +313,6 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
                         style={{ width: `${Math.min(detail.risk_score, 100)}%` }}
                       />
                     </div>
-                    <p className="text-[11px] text-slate-400">
-                      {detail.risk_score > 60
-                        ? "High risk of permanent revenue loss."
-                        : detail.risk_score > 35
-                        ? "Moderate risk. Timely recovery recommended."
-                        : "Low risk. High probability of fast recovery."}
-                    </p>
                   </div>
 
                   {/* Recovery Probability */}
@@ -236,12 +329,6 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
                         style={{ width: `${Math.min(detail.recovery_probability * 100, 100)}%` }}
                       />
                     </div>
-                    <p className="text-[11px] text-slate-400">
-                      Estimated recoverable value:{" "}
-                      <span className="text-emerald-300 font-semibold">
-                        {formatINR(Math.round(detail.payment_event.amount * detail.recovery_probability))}
-                      </span>
-                    </p>
                   </div>
                 </div>
 
@@ -264,7 +351,7 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
                 )}
               </div>
 
-              {/* Recommended Action */}
+              {/* Recommended Action & Stage 3A Execution Trigger */}
               <div className="rounded-xl bg-gradient-to-r from-blue-950/40 via-indigo-950/40 to-slate-900 border border-blue-800/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">
@@ -274,10 +361,27 @@ export function CaseDetailModal({ caseId, onClose }: CaseDetailModalProps) {
                     {detail.recommended_action}
                   </p>
                 </div>
+
                 <div className="flex items-center space-x-2">
-                  <span className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-medium">
-                    Auto-Policy Eligible
-                  </span>
+                  {detail.status !== "RECOVERED" && (
+                    <button
+                      onClick={handleGenerateLink}
+                      disabled={executing}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors flex items-center space-x-2 shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                    >
+                      {executing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>Calling Razorpay Test API...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-4 w-4 text-amber-300" />
+                          <span>Generate Razorpay Test Link</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </>

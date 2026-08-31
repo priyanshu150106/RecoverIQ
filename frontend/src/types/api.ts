@@ -40,6 +40,9 @@ export interface RecoveryActionItem {
   action_type: string;
   status: string;
   external_reference?: string | null;
+  payment_link_id?: string | null;
+  payment_link_url?: string | null;
+  error_message?: string | null;
   created_at: string;
 }
 
@@ -80,4 +83,15 @@ export interface RecoveryCaseDetail {
     amount_context?: string;
     model?: string;
   } | null;
+}
+
+export interface ExecuteLinkResponse {
+  status: string;
+  message: string;
+  recovery_case_id: number;
+  action_id: number;
+  payment_link_id: string;
+  payment_link_url: string;
+  amount: number;
+  currency: string;
 }

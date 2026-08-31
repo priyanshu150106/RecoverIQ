@@ -11,6 +11,9 @@ class RecoveryActionResponse(BaseModel):
     action_type: str
     status: str
     external_reference: Optional[str] = None
+    payment_link_id: Optional[str] = None
+    payment_link_url: Optional[str] = None
+    error_message: Optional[str] = None
     created_at: datetime
 
     class Config:

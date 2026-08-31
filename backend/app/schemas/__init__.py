@@ -13,6 +13,11 @@ from app.schemas.recovery_case import (
     RecoveryCaseDetailResponse,
     RecoveryActionResponse,
 )
+from app.schemas.recovery_action import (
+    ExecuteLinkRequest,
+    ExecuteLinkResponse,
+    PolicyCheckResult,
+)
 from app.schemas.metrics import DashboardMetricsResponse
 
 __all__ = [
@@ -27,5 +32,8 @@ __all__ = [
     "RecoveryCaseListItem",
     "RecoveryCaseDetailResponse",
     "RecoveryActionResponse",
+    "ExecuteLinkRequest",
+    "ExecuteLinkResponse",
+    "PolicyCheckResult",
     "DashboardMetricsResponse",
 ]

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -10,8 +10,11 @@ class RecoveryAction(Base):
     id = Column(Integer, primary_key=True, index=True)
     recovery_case_id = Column(Integer, ForeignKey("recovery_cases.id"), nullable=False, index=True)
     action_type = Column(String(100), nullable=False)
-    status = Column(String(50), default="PENDING", nullable=False)
+    status = Column(String(50), default="PENDING", nullable=False)  # PENDING, EXECUTED, FAILED
     external_reference = Column(String(255), nullable=True)
+    payment_link_id = Column(String(255), nullable=True)
+    payment_link_url = Column(String(500), nullable=True)
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

@@ -1,5 +1,10 @@
+import os
+from typing import List, Optional
 from pydantic_settings import BaseSettings
-from typing import List
+
+# Absolute path to backend/.env
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 
 class Settings(BaseSettings):
@@ -17,9 +22,14 @@ class Settings(BaseSettings):
     # Database configuration (SQLite for local rapid prototype)
     DATABASE_URL: str = "sqlite:///./recoveriq.db"
 
+    # Razorpay Test Mode Credentials (loaded from backend/.env)
+    RAZORPAY_KEY_ID: Optional[str] = None
+    RAZORPAY_KEY_SECRET: Optional[str] = None
+
     class Config:
         case_sensitive = True
-        env_file = ".env"
+        env_file = ENV_FILE
+        extra = "ignore"
 
 
 settings = Settings()
