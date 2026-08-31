@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: Optional[str] = None
     RAZORPAY_KEY_SECRET: Optional[str] = None
 
+    # Razorpay Webhook Secret (loaded from backend/.env)
+    RECOVERIQ_WEBHOOK_SECRET: Optional[str] = None
+
     class Config:
         case_sensitive = True
         env_file = ENV_FILE
