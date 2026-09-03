@@ -18,11 +18,16 @@ import {
   Copy,
   Check,
   Zap,
+  Bot,
+  ShieldAlert,
+  HelpCircle,
+  TrendingUp,
 } from "lucide-react";
-import { RecoveryCaseDetail } from "@/types/api";
+import { RecoveryCaseDetail, AIRecoveryRecommendationResponse } from "@/types/api";
 import {
   fetchRecoveryCaseDetail,
   executePaymentLink,
+  fetchAIRecommendation,
   formatINR,
 } from "@/services/api";
 
@@ -44,10 +49,17 @@ export function CaseDetailModal({
   const [execError, setExecError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
+  // Stage 4 AI Agent state
+  const [aiRec, setAiRec] = useState<AIRecoveryRecommendationResponse | null>(null);
+  const [analyzingAI, setAnalyzingAI] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
   const loadCase = (id: number) => {
     setLoading(true);
     setError(null);
     setExecError(null);
+    setAiRec(null);
+    setAiError(null);
 
     fetchRecoveryCaseDetail(id)
       .then((data) => {
@@ -65,6 +77,21 @@ export function CaseDetailModal({
     if (!caseId) return;
     loadCase(caseId);
   }, [caseId]);
+
+  const handleRunAIAnalysis = async () => {
+    if (!caseId) return;
+    setAnalyzingAI(true);
+    setAiError(null);
+
+    try {
+      const rec = await fetchAIRecommendation(caseId);
+      setAiRec(rec);
+    } catch (err: any) {
+      setAiError(err.message || "AI Agent recommendation failed.");
+    } finally {
+      setAnalyzingAI(false);
+    }
+  };
 
   const handleGenerateLink = async () => {
     if (!caseId) return;
@@ -119,6 +146,8 @@ export function CaseDetailModal({
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                         : detail.status === "IN_PROGRESS"
                         ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                        : detail.status === "CANCELLED"
+                        ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
                         : "bg-amber-500/10 text-amber-400 border-amber-500/20"
                     }`}
                   >
@@ -126,7 +155,7 @@ export function CaseDetailModal({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">Diagnostic Breakdown & Recovery Actions</p>
+              <p className="text-xs text-slate-400">Diagnostic Breakdown & Autonomous Recovery Engine</p>
             </div>
           </div>
 
@@ -288,65 +317,161 @@ export function CaseDetailModal({
                 </div>
               </div>
 
-              {/* Scoring & Recovery Metrics */}
-              <div className="rounded-xl bg-slate-800/60 border border-slate-700/60 p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    <Gauge className="h-4 w-4 text-emerald-400" />
-                    <span>Scoring & Diagnostic Assessment</span>
+              {/* STAGE 4: AI Recovery Agent Analysis Console */}
+              <div className="rounded-2xl bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-slate-900 border border-purple-500/30 p-5 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center space-x-2">
+                        <span>AI Recovery Agent Analysis</span>
+                        {aiRec && (
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                              aiRec.source === "ai"
+                                ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                                : "bg-slate-700/60 text-slate-300 border-slate-600"
+                            }`}
+                          >
+                            {aiRec.source === "ai"
+                              ? `Model: ${aiRec.model_used || "OpenAI"}`
+                              : "Deterministic Fallback Engine"}
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        High-precision failure diagnostics and automated policy recommendations
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-xs text-slate-400">Confidence: {(detail.confidence * 100).toFixed(0)}%</span>
+
+                  <button
+                    onClick={handleRunAIAnalysis}
+                    disabled={analyzingAI}
+                    className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-all flex items-center space-x-2 shadow-lg shadow-purple-600/20 disabled:opacity-50 shrink-0"
+                  >
+                    {analyzingAI ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>AI analyzing recovery signals...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                        <span>{aiRec ? "Re-Analyze with AI" : "Analyze with AI"}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Risk Score */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Risk Magnitude:</span>
-                      <span className={`font-bold ${detail.risk_score > 60 ? "text-rose-400" : detail.risk_score > 35 ? "text-amber-400" : "text-emerald-400"}`}>
-                        {detail.risk_score} / 100
+                {/* AI Error Warning */}
+                {aiError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center space-x-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>{aiError}</span>
+                  </div>
+                )}
+
+                {/* AI Analysis Result Display */}
+                {aiRec ? (
+                  <div className="space-y-4">
+                    {/* Metrics 4-Col Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Recovery Prob.</div>
+                        <div className="text-lg font-bold text-emerald-400 mt-0.5">
+                          {(aiRec.recommendation.recovery_probability * 100).toFixed(0)}%
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Urgency</div>
+                        <div className="mt-1">
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded ${
+                              aiRec.recommendation.urgency === "HIGH"
+                                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                : aiRec.recommendation.urgency === "MEDIUM"
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                            }`}
+                          >
+                            {aiRec.recommendation.urgency}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Confidence</div>
+                        <div className="text-lg font-bold text-indigo-300 mt-0.5">
+                          {(aiRec.recommendation.confidence * 100).toFixed(0)}%
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Policy Decision</div>
+                        <div className="mt-1">
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded flex items-center space-x-1 w-fit ${
+                              aiRec.recommendation.policy_recommendation === "ALLOW"
+                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                : aiRec.recommendation.policy_recommendation === "REVIEW"
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                            }`}
+                          >
+                            <span>
+                              {aiRec.recommendation.policy_recommendation === "ALLOW"
+                                ? "✓ ALLOWED"
+                                : aiRec.recommendation.policy_recommendation === "REVIEW"
+                                ? "⚠ REVIEW"
+                                : "✕ BLOCKED"}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recommended Action */}
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex justify-between items-center">
+                      <span className="text-xs text-slate-400 font-medium">Recommended Action:</span>
+                      <span className="text-xs font-mono font-bold text-purple-300 bg-purple-500/10 px-2.5 py-1 rounded border border-purple-500/20">
+                        {aiRec.recommendation.recommended_action}
                       </span>
                     </div>
-                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${detail.risk_score > 60 ? "bg-rose-500" : detail.risk_score > 35 ? "bg-amber-500" : "bg-emerald-500"}`}
-                        style={{ width: `${Math.min(detail.risk_score, 100)}%` }}
-                      />
+
+                    {/* Reasoning Section (Why?) */}
+                    <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                      <div className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                        <HelpCircle className="h-3.5 w-3.5 text-purple-400" />
+                        <span>Diagnostic Reasoning</span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        "{aiRec.recommendation.reasoning}"
+                      </p>
+                    </div>
+
+                    {/* Key Signals Bullet Points */}
+                    <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
+                      <div className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                        <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
+                        <span>Key Signals Detected</span>
+                      </div>
+                      <ul className="space-y-1 text-xs text-slate-300">
+                        {aiRec.recommendation.signals.map((sig, idx) => (
+                          <li key={idx} className="flex items-start space-x-2">
+                            <span className="text-purple-400 text-sm leading-none">•</span>
+                            <span>{sig}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
-
-                  {/* Recovery Probability */}
-                  <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-slate-400">Recovery Probability:</span>
-                      <span className="font-bold text-emerald-400">
-                        {(detail.recovery_probability * 100).toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full"
-                        style={{ width: `${Math.min(detail.recovery_probability * 100, 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Scoring Breakdown Details */}
-                {detail.scoring_breakdown && (
-                  <div className="p-3 rounded-lg bg-slate-900/40 border border-slate-800/80 text-xs space-y-1 text-slate-300">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Reason Category:</span>
-                      <span className="font-medium text-white">{detail.scoring_breakdown.category}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Customer Factor:</span>
-                      <span className="font-medium text-slate-200">{detail.scoring_breakdown.customer_history}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Amount Context:</span>
-                      <span className="font-medium text-slate-200">{detail.scoring_breakdown.amount_context}</span>
-                    </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 text-center space-y-1 text-xs text-slate-400">
+                    <p>Click <strong className="text-purple-300">"Analyze with AI"</strong> to generate deep failure diagnostics, behavioral probability scoring, and automated policy verification.</p>
                   </div>
                 )}
               </div>
@@ -355,7 +480,7 @@ export function CaseDetailModal({
               <div className="rounded-xl bg-gradient-to-r from-blue-950/40 via-indigo-950/40 to-slate-900 border border-blue-800/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">
-                    Recommended Recovery Action
+                    Execution Trigger
                   </span>
                   <p className="text-base font-bold text-white mt-0.5 font-mono">
                     {detail.recommended_action}
@@ -363,7 +488,7 @@ export function CaseDetailModal({
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  {detail.status !== "RECOVERED" && (
+                  {detail.status !== "RECOVERED" && detail.status !== "CANCELLED" && (
                     <button
                       onClick={handleGenerateLink}
                       disabled={executing}

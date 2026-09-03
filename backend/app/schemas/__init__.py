@@ -18,6 +18,10 @@ from app.schemas.recovery_action import (
     ExecuteLinkResponse,
     PolicyCheckResult,
 )
+from app.schemas.ai_recommendation import (
+    AIRecoveryRecommendation,
+    AIRecoveryRecommendationResponse,
+)
 from app.schemas.metrics import DashboardMetricsResponse
 
 __all__ = [
@@ -35,5 +39,7 @@ __all__ = [
     "ExecuteLinkRequest",
     "ExecuteLinkResponse",
     "PolicyCheckResult",
+    "AIRecoveryRecommendation",
+    "AIRecoveryRecommendationResponse",
     "DashboardMetricsResponse",
 ]

@@ -95,3 +95,21 @@ export interface ExecuteLinkResponse {
   amount: number;
   currency: string;
 }
+
+export interface AIRecoveryRecommendation {
+  recovery_probability: number; // 0.0 to 1.0
+  recommended_action: string;
+  urgency: "LOW" | "MEDIUM" | "HIGH";
+  confidence: number; // 0.0 to 1.0
+  reasoning: string;
+  signals: string[];
+  policy_recommendation: "ALLOW" | "BLOCK" | "REVIEW";
+}
+
+export interface AIRecoveryRecommendationResponse {
+  status: string;
+  recovery_case_id: number;
+  source: "ai" | "fallback";
+  model_used?: string | null;
+  recommendation: AIRecoveryRecommendation;
+}

@@ -3,6 +3,7 @@ import {
   RecoveryCaseItem,
   RecoveryCaseDetail,
   ExecuteLinkResponse,
+  AIRecoveryRecommendationResponse,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -43,6 +44,24 @@ export async function fetchRecoveryCaseDetail(
     );
   }
   return res.json();
+}
+
+export async function fetchAIRecommendation(
+  caseId: number
+): Promise<AIRecoveryRecommendationResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/recovery-cases/${caseId}/ai-recommendation`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `AI analysis failed with HTTP ${res.status}`);
+  }
+  return data;
 }
 
 export async function executePaymentLink(

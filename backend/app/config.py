@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Razorpay Webhook Secret (loaded from backend/.env)
     RECOVERIQ_WEBHOOK_SECRET: Optional[str] = None
 
+    # OpenAI Configuration (loaded from backend/.env)
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+
     class Config:
         case_sensitive = True
         env_file = ENV_FILE
