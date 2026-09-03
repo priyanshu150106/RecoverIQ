@@ -15,6 +15,8 @@ from app.schemas.recovery_approval import ApprovalExecutionResponse
 from app.services.razorpay_client import razorpay_client, RazorpayClientError
 from app.services.recovery_strategy import recovery_strategy_engine
 from app.policies.link_policy import link_safety_policy
+from app.services.recovery_outcome import recovery_outcome_service
+from app.services.logging_service import structured_logger
 
 
 class RecoveryApprovalService:
@@ -67,6 +69,16 @@ class RecoveryApprovalService:
         db.add(approval)
         db.commit()
         db.refresh(approval)
+
+        structured_logger.info(
+            component="approval_service",
+            operation="REQUEST_APPROVAL",
+            message=f"Approval requested for Case #{case.id} strategy {strategy}",
+            case_id=case.id,
+            approval_id=approval.id,
+            details={"strategy": strategy, "requested_by": requested_by}
+        )
+
         return approval
 
     @classmethod
@@ -99,6 +111,16 @@ class RecoveryApprovalService:
 
         db.commit()
         db.refresh(approval)
+
+        structured_logger.info(
+            component="approval_service",
+            operation="APPROVE_APPROVAL",
+            message=f"Approval #{approval.id} APPROVED by {approved_by}",
+            case_id=approval.recovery_case_id,
+            approval_id=approval.id,
+            details={"approved_by": approved_by}
+        )
+
         return approval
 
     @classmethod
@@ -130,6 +152,16 @@ class RecoveryApprovalService:
 
         db.commit()
         db.refresh(approval)
+
+        structured_logger.info(
+            component="approval_service",
+            operation="REJECT_APPROVAL",
+            message=f"Approval #{approval.id} REJECTED by {rejected_by}",
+            case_id=approval.recovery_case_id,
+            approval_id=approval.id,
+            details={"rejected_by": rejected_by, "reason": approval.reason}
+        )
+
         return approval
 
     @classmethod
@@ -163,6 +195,13 @@ class RecoveryApprovalService:
         # 1. Re-run Deterministic Link Safety Policy
         is_valid, violation_msg = link_safety_policy.validate(case=case, db=db)
         if not is_valid:
+            structured_logger.warning(
+                component="approval_service",
+                operation="POLICY_GATE_RECHECK",
+                message=f"Policy gate rejection during approved execution: {violation_msg}",
+                case_id=case.id,
+                approval_id=approval.id
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Policy Gate Violation: {violation_msg}"
@@ -205,7 +244,10 @@ class RecoveryApprovalService:
                     error_message=str(e),
                 )
                 db.add(failed_act)
+                recovery_outcome_service.create_pending_outcome(db, case.id, None, approval.strategy_type)
+                recovery_outcome_service.mark_failed(db, case.id, str(e))
                 db.commit()
+
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
                     detail=f"Razorpay link creation failed: {str(e)}"
@@ -227,6 +269,23 @@ class RecoveryApprovalService:
             db.add(action)
             db.commit()
             db.refresh(action)
+
+            # Record outcome tracking
+            recovery_outcome_service.create_pending_outcome(
+                db=db,
+                case_id=case.id,
+                action_id=action.id,
+                strategy_type=approval.strategy_type
+            )
+
+            structured_logger.info(
+                component="approval_service",
+                operation="EXECUTE_APPROVED",
+                message=f"Approved strategy {approval.strategy_type} EXECUTED successfully for Case #{case.id}",
+                case_id=case.id,
+                approval_id=approval.id,
+                recovery_action_id=action.id
+            )
 
             return ApprovalExecutionResponse(
                 approval_id=approval.id,
@@ -253,6 +312,22 @@ class RecoveryApprovalService:
             db.add(action)
             db.commit()
             db.refresh(action)
+
+            recovery_outcome_service.create_pending_outcome(
+                db=db,
+                case_id=case.id,
+                action_id=action.id,
+                strategy_type=approval.strategy_type
+            )
+
+            structured_logger.info(
+                component="approval_service",
+                operation="EXECUTE_APPROVED",
+                message=f"Approved reminder outreach logged for Case #{case.id}",
+                case_id=case.id,
+                approval_id=approval.id,
+                recovery_action_id=action.id
+            )
 
             return ApprovalExecutionResponse(
                 approval_id=approval.id,

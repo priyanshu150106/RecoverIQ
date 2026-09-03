@@ -1,54 +1,77 @@
 # RecoverIQ Architecture & Safety Specification
 
-## 1. Stage 2 Data Pipeline Overview
+## 1. End-to-End Recovery Pipeline (Stages 1–7)
 
 ```
-Raw Ingestion (POST /api/events or Webhooks)
-   │
-   ▼
-[EventNormalizer] ─── Standardizes to NormalizedEvent schema (Independent of gateway)
-   │
-   ▼
-[EventIngestionService]
-   ├── Deduplication Check (on external_event_id)
-   ├── Customer Resolution (Find existing or create new Customer profile)
-   ├── PaymentEvent Persistence (amount in paise, status, reason)
-   │
-   ▼ (if at-risk: payment.failed, payment_link.expired, etc.)
-[RecoveryScorer] ──── Deterministic baseline heuristics (History, Amount, Failure Type)
-   │
-   ▼
-[RecoveryCase & RecoveryAction Persistence]
-   │
-   ▼
-[FastAPI Endpoints] ─ GET /api/dashboard/metrics & GET /api/recovery-cases
-   │
-   ▼
-[Next.js Dashboard] ─ Live Recovery Queue, Metric Cards, Diagnostic Modals
+Payment Failure / Expiring Link / Webhook
+                     │
+                     ▼
+         [EventNormalizer] ────────── Standardizes to NormalizedEvent schema
+                     │
+                     ▼
+       [EventIngestionService]
+          ├── Deduplication Check (on external_event_id)
+          ├── Customer Profile Resolution
+          └── PaymentEvent Persistence
+                     │
+                     ▼
+        [RecoveryScorer] ──────────── Deterministic baseline risk & probability
+                     │
+                     ▼
+        [RecoveryCase Created] ────── Status: DETECTED
+                     │
+                     ▼
+     [OpenAI Recovery Agent] ──────── Consultative Diagnostic Analysis
+          └── Signals, Urgency, Failure Root Cause (Zero PII transmitted)
+                     │
+                     ▼
+   [Recovery Strategy Engine] ─────── Deterministic Rule Matrix
+          ├── SEND_SMART_RETRY_LINK
+          ├── SEND_PAYMENT_LINK
+          ├── SEND_REMINDER
+          ├── HUMAN_REVIEW
+          └── NO_ACTION
+                     │
+                     ▼
+   [Human-in-the-Loop Console] ────── Status: PENDING ➔ APPROVED / REJECTED
+                     │
+                     ▼ (If Approved)
+    [Deterministic Policy Gate] ───── Fresh re-check (rzp_test_, cap <= ₹50,000, 30m cooldown)
+                     │
+                     ▼
+    [Razorpay Test Execution] ─────── Dispatches payment link to Razorpay sandbox
+                     │
+                     ▼
+     [Razorpay Webhook Receiver] ──── HMAC-SHA256 verification + idempotency
+          ├── payment_link.paid ────────── Status: RECOVERED
+          ├── payment_link.partially_paid ─ Status: IN_PROGRESS
+          ├── payment_link.cancelled ───── Status: CANCELLED
+          └── payment_link.expired ─────── Status: EXPIRED
+                     │
+                     ▼
+   [Recovery Outcome & Analytics] ─── Verified financial tracking & strategy matrix
 ```
-
-## 2. Deterministic Baseline Scoring Heuristics
-
-The Stage 2 scoring baseline uses transparent mathematical and rule-based evaluation:
-
-1. **Failure Category Base Assessment**:
-   - `Temporary Bank / Network Glitch` (e.g. `bank_authorization_timeout`): Risk: 28, Prob: 0.88, Action: `SEND_SMART_RETRY_LINK`
-   - `Payment Link Expiry` (`payment_link_ttl_expired`): Risk: 42, Prob: 0.72, Action: `EXTEND_PAYMENT_LINK_24H`
-   - `Partial Payment` (`payment_link.partially_paid`): Risk: 20, Prob: 0.92, Action: `SCHEDULE_WHATSAPP_REMINDER`
-   - `Insufficient Balance`: Risk: 58, Prob: 0.58, Action: `FALLBACK_UPI_INTENT`
-   - `Card Rejection` (`card_expired`, `card_declined`): Risk: 68, Prob: 0.45, Action: `SEND_UPDATE_PAYMENT_METHOD_LINK`
-   - `Fraud / High Velocity Flag`: Risk: 92, Prob: 0.10, Action: `FLAG_MANUAL_REVIEW`
-
-2. **Customer Historical Profile Adjustments**:
-   - Loyal customer (>= 2 successes, >= 75% success rate): Risk -12, Prob +0.12
-   - Repeat failure history (>= 2 failures, < 40% success rate): Risk +16, Prob -0.15
-
-3. **Amount Bracket Modifiers**:
-   - Low-ticket (< ₹1,500): Prob +0.05
-   - High-ticket (> ₹20,000): Risk +8, Action: `OFFER_FLEXIBLE_PAYMENT_OPTION`
 
 ---
 
-## 3. Synthetic Data Safeguard
+## 2. Core Architectural Principles: Prediction ≠ Execution ≠ Outcome
 
-All seed datasets and simulated events operate in isolation with zero external API calls to Razorpay or OpenAI in Stages 1 and 2.
+RecoverIQ maintains strict architectural boundaries:
+
+| Phase | Subsystem | Responsibility | Invariant |
+|---|---|---|---|
+| **Prediction** | OpenAI Agent & Baseline Scorer | Diagnostic analysis and probability estimation | **Consultative Only** — Cannot trigger financial operations. |
+| **Strategy** | Recovery Strategy Engine | Deterministic routing based on risk and failure type | Enforces operator review for high-risk or ambiguous cases. |
+| **Authorization** | Approval Service | Operator approval workflow | Every execution requires a fresh safety gate validation. |
+| **Execution** | Razorpay Client | Generates test payment links | **Test Mode Only** (`rzp_test_`), ₹50k cap, 30-min cooldown. |
+| **Outcome** | Recovery Outcome Service | Reconciles actual revenue recovered and duration | **Empirical Only** — Derived from cryptographic webhooks. |
+
+---
+
+## 3. Reliability, Observability & Error Handling
+
+- **`X-Request-ID`**: Propagated across every HTTP request and logged for end-to-end tracing.
+- **Structured JSON Logging**: Masked and sanitized log entries with zero secrets, webhook tokens, or customer PII.
+- **Transactional Webhook Processing**: Atomic database commits with automatic rollback on error.
+- **Readiness Probes**: `/api/system/readiness` and `/api/system/metrics` endpoints for health monitoring.
+- **Fail-Safe Fallback**: Deterministic rule engines remain fully operational even if external AI or network providers are degraded.

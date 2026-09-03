@@ -8,6 +8,13 @@ import {
   RecoveryStrategyResponse,
   RecoveryApprovalResponse,
   ApprovalExecutionResponse,
+  AnalyticsOverview,
+  StrategyAnalytics,
+  RecoveryTrendPoint,
+  RecoveryOutcome,
+  AIPerformanceMetrics,
+  SystemReadiness,
+  SystemMetrics,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -85,7 +92,7 @@ export async function fetchAIRecommendation(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `AI analysis failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `AI analysis failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -103,7 +110,7 @@ export async function fetchRecoveryStrategy(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Strategy evaluation failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Strategy evaluation failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -124,7 +131,7 @@ export async function requestCaseApproval(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Approval request failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Approval request failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -158,7 +165,7 @@ export async function approveApproval(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Approval failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Approval failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -179,7 +186,7 @@ export async function rejectApproval(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Rejection failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Rejection failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -197,7 +204,7 @@ export async function executeApprovedAction(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Execution failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Execution failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -217,7 +224,7 @@ export async function executePaymentLink(
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Execution failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Execution failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -233,9 +240,79 @@ export async function simulateDemoPayment(caseId: number): Promise<any> {
 
   const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.detail || `Demo payment simulation failed with HTTP ${res.status}`);
+    throw new Error(data.message || data.detail || `Demo payment simulation failed with HTTP ${res.status}`);
   }
   return data;
+}
+
+export async function fetchAnalyticsOverview(): Promise<AnalyticsOverview> {
+  const res = await fetch(`${API_BASE_URL}/api/analytics/overview`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch analytics overview: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchStrategyAnalytics(): Promise<StrategyAnalytics[]> {
+  const res = await fetch(`${API_BASE_URL}/api/analytics/strategies`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch strategy analytics: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchRecoveryTrend(days: number = 7): Promise<RecoveryTrendPoint[]> {
+  const res = await fetch(`${API_BASE_URL}/api/analytics/recovery-trend?days=${days}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch recovery trend: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchCaseOutcome(caseId: number): Promise<RecoveryOutcome> {
+  const res = await fetch(`${API_BASE_URL}/api/analytics/cases/${caseId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch outcome for case #${caseId}: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchAIPerformance(): Promise<AIPerformanceMetrics> {
+  const res = await fetch(`${API_BASE_URL}/api/analytics/ai-performance`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch AI performance: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchSystemReadiness(): Promise<SystemReadiness> {
+  const res = await fetch(`${API_BASE_URL}/api/system/readiness`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch system readiness: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchSystemMetrics(): Promise<SystemMetrics> {
+  const res = await fetch(`${API_BASE_URL}/api/system/metrics`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch system metrics: ${res.status}`);
+  }
+  return res.json();
 }
 
 export async function ingestEvent(payload: Record<string, any>): Promise<any> {

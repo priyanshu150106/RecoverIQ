@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Header } from "@/components/Header";
 import { MetricCard } from "@/components/MetricCard";
-import { BackendStatus } from "@/components/BackendStatus";
+import { SystemStatus } from "@/components/SystemStatus";
+import { RecoveryAnalytics } from "@/components/RecoveryAnalytics";
 import { RecoveryQueue } from "@/components/RecoveryQueue";
 import { AgentActivityFeed } from "@/components/AgentActivityFeed";
 import { CaseDetailModal } from "@/components/CaseDetailModal";
@@ -18,7 +19,7 @@ import {
   Bot,
   Shield,
   History,
-  Radio,
+  Activity,
 } from "lucide-react";
 import { DashboardMetrics, RecoveryCaseItem } from "@/types/api";
 import { fetchDashboardMetrics, fetchRecoveryCases, formatINR } from "@/services/api";
@@ -67,14 +68,14 @@ export default function DashboardPage() {
               Revenue Recovery Command Center
             </h1>
             <p className="mt-1 text-sm sm:text-base text-slate-400">
-              Autonomous revenue recovery engine for Razorpay merchants with live AI diagnostics & audit streams.
+              Autonomous revenue recovery engine for Razorpay merchants with live AI diagnostics, deterministic approvals, and outcome analytics.
             </p>
           </div>
 
           <div className="flex items-center space-x-2.5">
             <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Stage 5 Active</span>
+              <span>Stage 7 Active</span>
             </span>
             <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
               Razorpay Test Mode
@@ -82,8 +83,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Backend Live Status Component */}
-        <BackendStatus />
+        {/* STAGE 7: System Reliability & Observability Console */}
+        <SystemStatus />
 
         {/* Ingest Simulator / Quick Actions */}
         <IngestSimulator onEventCreated={loadData} />
@@ -150,6 +151,9 @@ export default function DashboardPage() {
             }
           />
         </div>
+
+        {/* STAGE 7: Recovery Intelligence & Analytics Console */}
+        <RecoveryAnalytics />
 
         {/* STAGE 5: Real-Time Agent Activity Stream */}
         <AgentActivityFeed onSelectCase={setSelectedCaseId} />
@@ -231,7 +235,7 @@ export default function DashboardPage() {
       />
 
       <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>RecoverIQ • AI Revenue Recovery Agent for Razorpay Merchants • Hackathon Edition (Stage 5 Active)</p>
+        <p>RecoverIQ • AI Revenue Recovery Agent for Razorpay Merchants • Hackathon Edition (Stage 7 Active)</p>
       </footer>
     </div>
   );

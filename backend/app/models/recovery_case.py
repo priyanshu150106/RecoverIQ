@@ -22,6 +22,7 @@ class RecoveryCase(Base):
     payment_event = relationship("PaymentEvent", back_populates="recovery_case")
     recovery_actions = relationship("RecoveryAction", back_populates="recovery_case", cascade="all, delete-orphan")
     approvals = relationship("RecoveryApproval", back_populates="recovery_case", cascade="all, delete-orphan")
+    outcomes = relationship("RecoveryOutcome", back_populates="recovery_case", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<RecoveryCase(id={self.id}, risk={self.risk_score}, prob={self.recovery_probability}, status='{self.status}')>"

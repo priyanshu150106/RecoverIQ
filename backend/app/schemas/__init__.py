@@ -38,6 +38,14 @@ from app.schemas.recovery_approval import (
     RecoveryApprovalResponse,
     ApprovalExecutionResponse,
 )
+from app.schemas.analytics import (
+    OutcomeStatus,
+    RecoveryOutcomeResponse,
+    AnalyticsOverviewResponse,
+    StrategyAnalyticsResponse,
+    RecoveryTrendPoint,
+    AIPerformanceResponse,
+)
 from app.schemas.metrics import DashboardMetricsResponse
 
 __all__ = [
@@ -67,5 +75,11 @@ __all__ = [
     "ApprovalDecisionRequest",
     "RecoveryApprovalResponse",
     "ApprovalExecutionResponse",
+    "OutcomeStatus",
+    "RecoveryOutcomeResponse",
+    "AnalyticsOverviewResponse",
+    "StrategyAnalyticsResponse",
+    "RecoveryTrendPoint",
+    "AIPerformanceResponse",
     "DashboardMetricsResponse",
 ]

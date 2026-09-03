@@ -9,6 +9,7 @@ from app.models.recovery_action import RecoveryAction
 from app.schemas.recovery_action import ExecuteLinkRequest, ExecuteLinkResponse
 from app.policies.link_policy import link_safety_policy
 from app.services.razorpay_client import razorpay_client, RazorpayClientError
+from app.services.recovery_outcome import recovery_outcome_service
 
 router = APIRouter(prefix="/api/recovery-cases", tags=["Recovery Actions"])
 
@@ -68,6 +69,8 @@ def execute_payment_link(
             created_at=datetime.utcnow()
         )
         db.add(failed_action)
+        recovery_outcome_service.create_pending_outcome(db, case.id, None, "SEND_PAYMENT_LINK")
+        recovery_outcome_service.mark_failed(db, case.id, str(err))
         db.commit()
 
         raise HTTPException(
@@ -102,10 +105,18 @@ def execute_payment_link(
     )
     db.add(action)
 
-    # Update case lifecycle status
+    # Update case lifecycle status and record outcome tracking
     case.status = "IN_PROGRESS"
     db.commit()
     db.refresh(action)
+
+    # Create pending outcome for analytics
+    recovery_outcome_service.create_pending_outcome(
+        db=db,
+        case_id=case.id,
+        action_id=action.id,
+        strategy_type="SEND_PAYMENT_LINK"
+    )
 
     return ExecuteLinkResponse(
         status="success",

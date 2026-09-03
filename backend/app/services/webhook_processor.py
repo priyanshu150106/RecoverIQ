@@ -1,7 +1,7 @@
 """Razorpay Payment Link Webhook Processor Service.
 
 Handles cryptographic signature verification, idempotency checking via x-razorpay-event-id,
-and transactional database updates for payment link lifecycle events.
+transactional database updates with rollback safety, and outcome tracking.
 """
 import hmac
 import hashlib
@@ -14,6 +14,8 @@ from app.models.customer import Customer
 from app.models.payment_event import PaymentEvent
 from app.models.recovery_case import RecoveryCase
 from app.models.recovery_action import RecoveryAction
+from app.services.recovery_outcome import recovery_outcome_service
+from app.services.logging_service import structured_logger
 
 
 class WebhookProcessingError(Exception):
@@ -25,7 +27,7 @@ class WebhookProcessingError(Exception):
 
 
 class WebhookProcessor:
-    """Processes incoming Razorpay webhooks securely and idempotently."""
+    """Processes incoming Razorpay webhooks securely, transactionally, and idempotently."""
 
     SUPPORTED_EVENTS = {
         "payment_link.paid",
@@ -79,10 +81,21 @@ class WebhookProcessor:
             secret=settings.RECOVERIQ_WEBHOOK_SECRET
         )
         if not is_valid:
+            structured_logger.warning(
+                component="webhook_processor",
+                operation="VERIFY_SIGNATURE",
+                message=sig_error or "Signature verification failed",
+                details={"event_id": event_id}
+            )
             raise WebhookProcessingError(sig_error or "Signature verification failed.", status_code=400)
 
         # 2. Idempotency Header Check
         if not event_id or not event_id.strip():
+            structured_logger.warning(
+                component="webhook_processor",
+                operation="CHECK_HEADER",
+                message="Missing required header: X-Razorpay-Event-Id"
+            )
             raise WebhookProcessingError(
                 "Missing required header: X-Razorpay-Event-Id. Webhooks without event IDs are rejected.",
                 status_code=400
@@ -96,6 +109,12 @@ class WebhookProcessor:
         ).first()
 
         if existing_event:
+            structured_logger.info(
+                component="webhook_processor",
+                operation="CHECK_IDEMPOTENCY",
+                message="Duplicate webhook event delivery ignored safely",
+                event_id=clean_event_id
+            )
             return {
                 "status": "ignored",
                 "message": "Duplicate event ignored (already processed).",
@@ -107,6 +126,11 @@ class WebhookProcessor:
         try:
             payload = json.loads(raw_body.decode("utf-8"))
         except Exception as exc:
+            structured_logger.warning(
+                component="webhook_processor",
+                operation="PARSE_JSON",
+                message=f"Malformed JSON payload: {str(exc)}"
+            )
             raise WebhookProcessingError(f"Malformed JSON payload: {str(exc)}", status_code=400)
 
         event_name = payload.get("event")
@@ -114,6 +138,12 @@ class WebhookProcessor:
             raise WebhookProcessingError("Missing 'event' field in webhook payload.", status_code=400)
 
         if event_name not in cls.SUPPORTED_EVENTS:
+            structured_logger.info(
+                component="webhook_processor",
+                operation="FILTER_EVENT",
+                message=f"Unsupported event '{event_name}' ignored",
+                event_id=clean_event_id
+            )
             return {
                 "status": "ignored",
                 "message": f"Unsupported event '{event_name}'.",
@@ -179,6 +209,13 @@ class WebhookProcessor:
             db.add(orphan_event)
             db.commit()
 
+            structured_logger.info(
+                component="webhook_processor",
+                operation="MATCH_CASE",
+                message=f"Payment link {plink_id} not associated with any active case",
+                event_id=clean_event_id
+            )
+
             return {
                 "status": "unmatched",
                 "message": f"Payment link {plink_id} not associated with any active RecoveryCase.",
@@ -187,78 +224,104 @@ class WebhookProcessor:
                 "payment_link_id": plink_id
             }
 
-        # 7. Apply Event-Specific Lifecycle Updates
-        customer = case.customer
+        # 7. Apply Event-Specific Lifecycle Updates (with Transaction Rollback Safety)
+        try:
+            customer = case.customer
 
-        if event_name == "payment_link.paid":
-            # Fully recovered
-            case.status = "RECOVERED"
-            if customer:
-                customer.total_paid += amount_paid
-                customer.successful_transactions += 1
+            if event_name == "payment_link.paid":
+                # Fully recovered
+                case.status = "RECOVERED"
+                if customer:
+                    customer.total_paid += amount_paid
+                    customer.successful_transactions += 1
 
-            new_event = PaymentEvent(
-                customer_id=case.customer_id,
-                event_type="payment_link.paid",
-                amount=amount_paid,
-                currency=case.payment_event.currency or "INR",
-                status="paid",
-                failure_reason=None,
-                external_event_id=clean_event_id,
-                created_at=datetime.utcnow()
+                new_event = PaymentEvent(
+                    customer_id=case.customer_id,
+                    event_type="payment_link.paid",
+                    amount=amount_paid,
+                    currency=case.payment_event.currency or "INR",
+                    status="paid",
+                    failure_reason=None,
+                    external_event_id=clean_event_id,
+                    created_at=datetime.utcnow()
+                )
+                db.add(new_event)
+                recovery_outcome_service.mark_recovered(db, case.id, amount_paid)
+
+            elif event_name == "payment_link.partially_paid":
+                # Partial payment received - keep active in IN_PROGRESS
+                case.status = "IN_PROGRESS"
+                if customer:
+                    customer.total_paid += amount_paid
+
+                new_event = PaymentEvent(
+                    customer_id=case.customer_id,
+                    event_type="payment_link.partially_paid",
+                    amount=amount_paid,
+                    currency=case.payment_event.currency or "INR",
+                    status="partially_paid",
+                    failure_reason="partial_payment_received",
+                    external_event_id=clean_event_id,
+                    created_at=datetime.utcnow()
+                )
+                db.add(new_event)
+                recovery_outcome_service.mark_partially_recovered(db, case.id, amount_paid)
+
+            elif event_name == "payment_link.cancelled":
+                # Cancelled - do not mark as recovered
+                case.status = "CANCELLED"
+
+                new_event = PaymentEvent(
+                    customer_id=case.customer_id,
+                    event_type="payment_link.cancelled",
+                    amount=amount,
+                    currency=case.payment_event.currency or "INR",
+                    status="cancelled",
+                    failure_reason="payment_link_cancelled_by_merchant",
+                    external_event_id=clean_event_id,
+                    created_at=datetime.utcnow()
+                )
+                db.add(new_event)
+                recovery_outcome_service.mark_cancelled(db, case.id)
+
+            elif event_name == "payment_link.expired":
+                # Expired - do not mark as recovered
+                new_event = PaymentEvent(
+                    customer_id=case.customer_id,
+                    event_type="payment_link.expired",
+                    amount=amount,
+                    currency=case.payment_event.currency or "INR",
+                    status="expired",
+                    failure_reason="payment_link_ttl_expired",
+                    external_event_id=clean_event_id,
+                    created_at=datetime.utcnow()
+                )
+                db.add(new_event)
+                recovery_outcome_service.mark_expired(db, case.id)
+
+            db.commit()
+            db.refresh(case)
+
+            structured_logger.info(
+                component="webhook_processor",
+                operation="UPDATE_CASE",
+                message=f"Webhook processed successfully for Case #{case.id}",
+                case_id=case.id,
+                event_id=clean_event_id,
+                details={"event": event_name, "case_status": case.status}
             )
-            db.add(new_event)
 
-        elif event_name == "payment_link.partially_paid":
-            # Partial payment received - keep active in IN_PROGRESS
-            case.status = "IN_PROGRESS"
-            if customer:
-                customer.total_paid += amount_paid
-
-            new_event = PaymentEvent(
-                customer_id=case.customer_id,
-                event_type="payment_link.partially_paid",
-                amount=amount_paid,
-                currency=case.payment_event.currency or "INR",
-                status="partially_paid",
-                failure_reason="partial_payment_received",
-                external_event_id=clean_event_id,
-                created_at=datetime.utcnow()
+        except Exception as err:
+            db.rollback()
+            structured_logger.error(
+                component="webhook_processor",
+                operation="TRANSACTION_ROLLBACK",
+                message="Error during webhook database update, transaction rolled back safely",
+                case_id=case.id if case else None,
+                event_id=clean_event_id,
+                details={"error": str(err)}
             )
-            db.add(new_event)
-
-        elif event_name == "payment_link.cancelled":
-            # Cancelled - do not mark as recovered
-            case.status = "CANCELLED"
-
-            new_event = PaymentEvent(
-                customer_id=case.customer_id,
-                event_type="payment_link.cancelled",
-                amount=amount,
-                currency=case.payment_event.currency or "INR",
-                status="cancelled",
-                failure_reason="payment_link_cancelled_by_merchant",
-                external_event_id=clean_event_id,
-                created_at=datetime.utcnow()
-            )
-            db.add(new_event)
-
-        elif event_name == "payment_link.expired":
-            # Expired - do not mark as recovered
-            new_event = PaymentEvent(
-                customer_id=case.customer_id,
-                event_type="payment_link.expired",
-                amount=amount,
-                currency=case.payment_event.currency or "INR",
-                status="expired",
-                failure_reason="payment_link_ttl_expired",
-                external_event_id=clean_event_id,
-                created_at=datetime.utcnow()
-            )
-            db.add(new_event)
-
-        db.commit()
-        db.refresh(case)
+            raise WebhookProcessingError(f"Database error during webhook processing: {str(err)}", status_code=500)
 
         return {
             "status": "success",

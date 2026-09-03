@@ -1,6 +1,6 @@
 """Database Seeding Script for RecoverIQ Development.
 
-Generates realistic SYNTHETIC customer profiles, payment events, and recovery cases.
+Generates realistic SYNTHETIC customer profiles, payment events, recovery cases, and outcomes.
 All records in this file are completely synthetic and for testing/hackathon purposes only.
 """
 import sys
@@ -15,6 +15,7 @@ from app.models.customer import Customer
 from app.models.payment_event import PaymentEvent
 from app.models.recovery_case import RecoveryCase
 from app.models.recovery_action import RecoveryAction
+from app.models.recovery_outcome import RecoveryOutcome
 from app.services.recovery_scoring import recovery_scorer
 from app.schemas.event import NormalizedEvent, NormalizedCustomerInfo
 
@@ -72,9 +73,9 @@ def run_seed():
 
         print(f"[SUCCESS] Created {len(customer_objs)} synthetic customers.")
 
-        # 2. Synthetic Payment Events (25 realistic events across categories)
+        # 2. Synthetic Payment Events
         events_data = [
-            # High recovery potential (Bank timeouts, network glitches)
+            # High recovery potential
             {
                 "email": "aarav.sharma@example.com",
                 "type": "payment.failed",
@@ -128,7 +129,7 @@ def run_seed():
                 "case_status": "DETECTED"
             },
 
-            # Partial Payments (High intent)
+            # Partial Payments
             {
                 "email": "sneha.k@example.com",
                 "type": "payment_link.partially_paid",
@@ -140,7 +141,7 @@ def run_seed():
                 "case_status": "IN_PROGRESS"
             },
 
-            # Insufficient Balance (UPI fallback recommended)
+            # Insufficient Balance
             {
                 "email": "kabir.mehta@example.com",
                 "type": "payment.failed",
@@ -238,7 +239,7 @@ def run_seed():
                 "case_status": "RECOVERED"
             },
 
-            # Successful Baseline Transactions (No Recovery Case required)
+            # Baseline Transactions
             {
                 "email": "aarav.sharma@example.com",
                 "type": "payment.captured",
@@ -342,6 +343,8 @@ def run_seed():
         ]
 
         created_cases_count = 0
+        created_outcomes_count = 0
+
         for ev in events_data:
             cust = customer_objs[ev["email"]]
             event_time = now - timedelta(hours=ev["delta_hours"])
@@ -389,24 +392,57 @@ def run_seed():
                 db.add(rc)
                 db.flush()
 
+                is_recovered = ev["case_status"] == "RECOVERED"
+                is_partial = ev["type"] == "payment_link.partially_paid"
+                is_in_progress = ev["case_status"] == "IN_PROGRESS"
+
                 act = RecoveryAction(
                     recovery_case_id=rc.id,
                     action_type=scoring["recommended_action"],
-                    status="EXECUTED" if ev["case_status"] == "RECOVERED" else "PENDING",
+                    status="EXECUTED" if (is_recovered or is_in_progress) else "PENDING",
                     external_reference=f"act_ref_{pe.id}",
+                    payment_link_id=f"plink_seed_{pe.id}",
+                    payment_link_url=f"https://rzp.io/i/seedLink{pe.id}",
                     created_at=event_time
                 )
                 db.add(act)
+                db.flush()
+
+                # 3. Seed measurable Recovery Outcomes
+                outcome_status = "RECOVERED" if is_recovered else ("PARTIALLY_RECOVERED" if is_partial else ("PENDING" if is_in_progress else "FAILED"))
+                amount_rec = ev["amount"] if is_recovered else (ev["amount"] // 2 if is_partial else 0)
+                rec_pct = 100.0 if is_recovered else (50.0 if is_partial else 0.0)
+                rec_time = event_time + timedelta(minutes=4) if is_recovered else None
+                rec_sec = 240.0 if is_recovered else None
+
+                outcome = RecoveryOutcome(
+                    recovery_case_id=rc.id,
+                    recovery_action_id=act.id,
+                    strategy_type=scoring["recommended_action"],
+                    outcome_status=outcome_status,
+                    amount_at_risk=ev["amount"],
+                    amount_recovered=amount_rec,
+                    recovery_percentage=rec_pct,
+                    execution_timestamp=event_time,
+                    recovery_timestamp=rec_time,
+                    time_to_recovery_seconds=rec_sec,
+                    created_at=event_time
+                )
+                db.add(outcome)
+
                 created_cases_count += 1
+                created_outcomes_count += 1
 
         db.commit()
         print(f"[SUCCESS] Created {len(events_data)} synthetic payment events.")
         print(f"[SUCCESS] Created {created_cases_count} recovery cases.")
+        print(f"[SUCCESS] Created {created_outcomes_count} recovery outcomes.")
 
         return {
             "customers": len(customer_objs),
             "events": len(events_data),
-            "cases": created_cases_count
+            "cases": created_cases_count,
+            "outcomes": created_outcomes_count
         }
 
     except Exception as e:
@@ -420,4 +456,4 @@ def run_seed():
 if __name__ == "__main__":
     result = run_seed()
     print("\n[SUCCESS] Seeding completed successfully!")
-    print(f"Customers: {result['customers']} | Events: {result['events']} | Recovery Cases: {result['cases']}")
+    print(f"Customers: {result['customers']} | Events: {result['events']} | Cases: {result['cases']} | Outcomes: {result['outcomes']}")

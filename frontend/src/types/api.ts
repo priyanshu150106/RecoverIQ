@@ -194,3 +194,95 @@ export interface ApprovalExecutionResponse {
   payment_link_url?: string | null;
   message: string;
 }
+
+export type OutcomeStatus =
+  | "RECOVERED"
+  | "PARTIALLY_RECOVERED"
+  | "FAILED"
+  | "EXPIRED"
+  | "CANCELLED"
+  | "PENDING";
+
+export interface RecoveryOutcome {
+  id: number;
+  recovery_case_id: number;
+  recovery_action_id?: number | null;
+  strategy_type: string;
+  outcome_status: OutcomeStatus;
+  amount_at_risk: number; // in paise
+  amount_recovered: number; // in paise
+  recovery_percentage: number;
+  execution_timestamp: string;
+  recovery_timestamp?: string | null;
+  time_to_recovery_seconds?: number | null;
+  created_at: string;
+}
+
+export interface AnalyticsOverview {
+  revenue_at_risk: number; // in paise
+  revenue_recovered: number; // in paise
+  recovery_rate: number;
+  average_recovery_percentage: number;
+  average_time_to_recovery_seconds: number;
+  executed_actions: number;
+  successful_recoveries: number;
+  partial_recoveries: number;
+  failed_recoveries: number;
+  expired_recoveries: number;
+  cancelled_recoveries: number;
+  pending_recoveries: number;
+}
+
+export interface StrategyAnalytics {
+  strategy: string;
+  cases: number;
+  executions: number;
+  recovered_cases: number;
+  partial_recoveries: number;
+  failed_cases: number;
+  recovery_rate: number;
+  amount_at_risk: number; // in paise
+  amount_recovered: number; // in paise
+  average_recovery_time: number;
+}
+
+export interface RecoveryTrendPoint {
+  date: string;
+  amount_at_risk: number; // in paise
+  amount_recovered: number; // in paise
+  recovery_rate: number;
+}
+
+export interface AIPerformanceMetrics {
+  analyzed_cases: number;
+  recovered_cases: number;
+  average_predicted_probability: number;
+  average_actual_recovery_percentage: number;
+  prediction_gap: number;
+}
+
+export interface SystemReadiness {
+  status: "ready" | "degraded";
+  database: string;
+  razorpay: string;
+  openai: string;
+  webhook: string;
+  environment: string;
+}
+
+export interface SystemMetrics {
+  total_recovery_cases: number;
+  detected_cases: number;
+  in_progress_cases: number;
+  recovered_cases: number;
+  cancelled_cases: number;
+  expired_cases: number;
+  total_payment_events: number;
+  total_recovery_actions: number;
+  successful_payment_links: number;
+  failed_payment_links: number;
+  pending_approvals: number;
+  approved_approvals: number;
+  rejected_approvals: number;
+  executed_approvals: number;
+}

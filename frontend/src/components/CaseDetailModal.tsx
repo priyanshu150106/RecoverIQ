@@ -36,6 +36,9 @@ import {
   Send,
   ThumbsUp,
   ThumbsDown,
+  Award,
+  DollarSign,
+  Timer,
 } from "lucide-react";
 import {
   RecoveryCaseDetail,
@@ -45,6 +48,7 @@ import {
   ActorType,
   RecoveryStrategyResponse,
   RecoveryApprovalResponse,
+  RecoveryOutcome,
 } from "@/types/api";
 import {
   fetchRecoveryCaseDetail,
@@ -57,6 +61,7 @@ import {
   approveApproval,
   rejectApproval,
   executeApprovedAction,
+  fetchCaseOutcome,
   formatINR,
 } from "@/services/api";
 
@@ -92,6 +97,9 @@ export function CaseDetailModal({
   const [approvals, setApprovals] = useState<RecoveryApprovalResponse[]>([]);
   const [approvalActionLoading, setApprovalActionLoading] = useState<boolean>(false);
   const [approvalMsg, setApprovalMsg] = useState<string | null>(null);
+
+  // Stage 7 Outcome Tracking state
+  const [outcome, setOutcome] = useState<RecoveryOutcome | null>(null);
 
   // Stage 5 Case Timeline state
   const [timeline, setTimeline] = useState<ActivityItem[]>([]);
@@ -138,6 +146,15 @@ export function CaseDetailModal({
       })
       .catch(() => {
         setApprovals([]);
+      });
+
+    // Fetch Stage 7 Outcome
+    fetchCaseOutcome(id)
+      .then((out) => {
+        setOutcome(out);
+      })
+      .catch(() => {
+        setOutcome(null);
       });
   };
 
@@ -274,7 +291,7 @@ export function CaseDetailModal({
 
   // Active link check
   const activeLinkAction = detail?.recovery_actions?.find(
-    (a) => a.action_type === "CREATE_PAYMENT_LINK" || a.action_type === "SEND_SMART_RETRY_LINK" || a.action_type === "SEND_PAYMENT_LINK" && a.status === "EXECUTED" && a.payment_link_url
+    (a) => (a.action_type === "CREATE_PAYMENT_LINK" || a.action_type === "SEND_SMART_RETRY_LINK" || a.action_type === "SEND_PAYMENT_LINK") && a.status === "EXECUTED" && a.payment_link_url
   );
 
   const activeApproval = approvals.find((a) => a.status === "PENDING" || a.status === "APPROVED");
@@ -357,6 +374,61 @@ export function CaseDetailModal({
             </div>
           ) : (
             <>
+              {/* STAGE 7: Measurable Recovery Outcome Card */}
+              {outcome && (
+                <div className="rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/20 border border-slate-700/80 p-5 space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <div className="flex items-center space-x-2">
+                      <Award className="h-4 w-4 text-emerald-400" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Recovery Outcome & Financial Reconciliation
+                      </span>
+                    </div>
+                    <span
+                      className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded border ${
+                        outcome.outcome_status === "RECOVERED"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                          : outcome.outcome_status === "PARTIALLY_RECOVERED"
+                          ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          : outcome.outcome_status === "PENDING"
+                          ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                          : "bg-slate-800 text-slate-400 border-slate-700"
+                      }`}
+                    >
+                      {outcome.outcome_status === "PENDING"
+                        ? "Awaiting Recovery"
+                        : outcome.outcome_status}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                      <span className="text-slate-400 text-[11px]">Amount at Risk</span>
+                      <div className="font-bold text-white mt-0.5">{formatINR(outcome.amount_at_risk)}</div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                      <span className="text-slate-400 text-[11px]">Amount Recovered</span>
+                      <div className="font-bold text-emerald-400 mt-0.5">{formatINR(outcome.amount_recovered)}</div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                      <span className="text-slate-400 text-[11px]">Recovery %</span>
+                      <div className="font-bold text-indigo-300 mt-0.5">{outcome.recovery_percentage}%</div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                      <span className="text-slate-400 text-[11px]">Time to Recovery</span>
+                      <div className="font-bold text-amber-300 mt-0.5">
+                        {outcome.time_to_recovery_seconds
+                          ? `${(outcome.time_to_recovery_seconds / 60).toFixed(1)}m`
+                          : "In Progress"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Active Razorpay Payment Link Card (if generated) */}
               {activeLinkAction?.payment_link_url && (
                 <div className="rounded-2xl bg-gradient-to-r from-emerald-950/40 via-slate-900 to-slate-900 border border-emerald-500/30 p-5 space-y-3">
