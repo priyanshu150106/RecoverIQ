@@ -10,6 +10,9 @@ from app.routes.recovery_actions import router as recovery_actions_router
 from app.routes.webhooks import router as webhooks_router
 from app.routes.events import router as events_router
 from app.routes.ai_agent import router as ai_agent_router
+from app.routes.activity import router as activity_router
+from app.routes.demo import router as demo_router
+from app.routes.strategy import router as strategy_router
 
 # Create database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -37,6 +40,9 @@ app.include_router(recovery_actions_router)
 app.include_router(webhooks_router)
 app.include_router(events_router)
 app.include_router(ai_agent_router)
+app.include_router(activity_router)
+app.include_router(demo_router)
+app.include_router(strategy_router)
 
 
 @app.get("/", tags=["Root"])
@@ -49,9 +55,13 @@ def root():
         "endpoints": {
             "health": "/health",
             "dashboard_metrics": "/api/dashboard/metrics",
+            "activity_feed": "/api/dashboard/activity-feed",
             "recovery_cases": "/api/recovery-cases",
+            "case_timeline": "/api/recovery-cases/{case_id}/timeline",
             "execute_link": "/api/recovery-cases/{case_id}/execute-link",
             "ai_recommendation": "/api/recovery-cases/{case_id}/ai-recommendation",
+            "strategy": "/api/recovery-cases/{case_id}/strategy",
+            "demo_simulate_payment": "/api/demo/recovery/{case_id}/simulate-payment",
             "webhooks": "/api/webhooks/razorpay",
             "events_ingestion": "/api/events"
         }

@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { MetricCard } from "@/components/MetricCard";
 import { BackendStatus } from "@/components/BackendStatus";
 import { RecoveryQueue } from "@/components/RecoveryQueue";
+import { AgentActivityFeed } from "@/components/AgentActivityFeed";
 import { CaseDetailModal } from "@/components/CaseDetailModal";
 import { IngestSimulator } from "@/components/IngestSimulator";
 import {
@@ -17,7 +18,7 @@ import {
   Bot,
   Shield,
   History,
-  Coins,
+  Radio,
 } from "lucide-react";
 import { DashboardMetrics, RecoveryCaseItem } from "@/types/api";
 import { fetchDashboardMetrics, fetchRecoveryCases, formatINR } from "@/services/api";
@@ -66,16 +67,17 @@ export default function DashboardPage() {
               Revenue Recovery Command Center
             </h1>
             <p className="mt-1 text-sm sm:text-base text-slate-400">
-              Deterministic revenue recovery engine for Razorpay merchants with live persistence.
+              Autonomous revenue recovery engine for Razorpay merchants with live AI diagnostics & audit streams.
             </p>
           </div>
 
           <div className="flex items-center space-x-2.5">
-            <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Stage 2 Live DB
+            <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Stage 5 Active</span>
             </span>
             <span className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
-              Synthetic Mode
+              Razorpay Test Mode
             </span>
           </div>
         </div>
@@ -149,6 +151,9 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* STAGE 5: Real-Time Agent Activity Stream */}
+        <AgentActivityFeed onSelectCase={setSelectedCaseId} />
+
         {/* Live Recovery Cases Queue */}
         <RecoveryQueue
           cases={cases}
@@ -164,13 +169,13 @@ export default function DashboardPage() {
         <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-white">Safe AI Recovery Workflow</h2>
+              <h2 className="text-lg font-semibold text-white">Autonomous Recovery Architecture</h2>
               <p className="text-xs text-slate-400">
-                End-to-end payment failure lifecycle protected by deterministic safety policy gates.
+                End-to-end payment failure lifecycle protected by deterministic safety policy gates and verified by activity audits.
               </p>
             </div>
             <span className="text-xs text-emerald-400 font-mono font-semibold">
-              Stage 3A Active (Razorpay Test Mode)
+              Live Pipeline Active
             </span>
           </div>
 
@@ -179,7 +184,7 @@ export default function DashboardPage() {
               <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
                 <CreditCard className="h-4 w-4" />
               </div>
-              <span className="text-xs font-semibold text-slate-200">1. Razorpay Event</span>
+              <span className="text-xs font-semibold text-slate-200">1. Ingest Event</span>
               <p className="text-[11px] text-slate-400">Failed payments, expiring links, partial invoices.</p>
             </div>
 
@@ -191,20 +196,20 @@ export default function DashboardPage() {
               <p className="text-[11px] text-slate-400">Standardized internal model & SQLite storage.</p>
             </div>
 
-            <div className="rounded-xl bg-slate-800/80 border border-slate-700/60 p-4 flex flex-col items-start space-y-2">
+            <div className="rounded-xl bg-slate-800/80 border border-purple-500/30 p-4 flex flex-col items-start space-y-2 bg-purple-950/10">
               <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
                 <Bot className="h-4 w-4" />
               </div>
-              <span className="text-xs font-semibold text-slate-200">3. Baseline / AI Agent</span>
-              <p className="text-[11px] text-slate-400">Deterministic scoring (AI reasoning in Stage 4).</p>
+              <span className="text-xs font-semibold text-purple-300">3. AI Agent</span>
+              <p className="text-[11px] text-slate-400">OpenAI structured diagnostic reasoning & fallback.</p>
             </div>
 
             <div className="rounded-xl bg-slate-800/80 border border-emerald-500/30 p-4 flex flex-col items-start space-y-2 bg-emerald-950/10">
               <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
                 <Shield className="h-4 w-4" />
               </div>
-              <span className="text-xs font-semibold text-emerald-300">4. Policy Engine</span>
-              <p className="text-[11px] text-slate-400">Hard limits & auto-action validation (Stage 3A).</p>
+              <span className="text-xs font-semibold text-emerald-300">4. Policy Gate</span>
+              <p className="text-[11px] text-slate-400">Deterministic isolation & hard limits verification.</p>
             </div>
 
             <div className="rounded-xl bg-slate-800/80 border border-slate-700/60 p-4 flex flex-col items-start space-y-2">
@@ -212,7 +217,7 @@ export default function DashboardPage() {
                 <History className="h-4 w-4" />
               </div>
               <span className="text-xs font-semibold text-slate-200">5. Execution & Audit</span>
-              <p className="text-[11px] text-slate-400">Razorpay Test execution & audit trail (Stage 3A).</p>
+              <p className="text-[11px] text-slate-400">Razorpay Test execution & real-time activity stream.</p>
             </div>
           </div>
         </div>
@@ -226,7 +231,7 @@ export default function DashboardPage() {
       />
 
       <footer className="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
-        <p>RecoverIQ • AI Revenue Recovery Agent for Razorpay Merchants • Hackathon Edition (Stage 3A Active)</p>
+        <p>RecoverIQ • AI Revenue Recovery Agent for Razorpay Merchants • Hackathon Edition (Stage 5 Active)</p>
       </footer>
     </div>
   );

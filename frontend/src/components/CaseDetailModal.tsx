@@ -22,12 +22,32 @@ import {
   ShieldAlert,
   HelpCircle,
   TrendingUp,
+  Activity,
+  History,
+  CheckCircle2,
+  Ban,
+  Hourglass,
+  AlertOctagon,
+  Compass,
+  UserCheck,
+  UserX,
+  Lock,
+  Unlock,
 } from "lucide-react";
-import { RecoveryCaseDetail, AIRecoveryRecommendationResponse } from "@/types/api";
+import {
+  RecoveryCaseDetail,
+  AIRecoveryRecommendationResponse,
+  ActivityItem,
+  ActionType,
+  ActorType,
+  RecoveryStrategyResponse,
+} from "@/types/api";
 import {
   fetchRecoveryCaseDetail,
   executePaymentLink,
   fetchAIRecommendation,
+  fetchRecoveryStrategy,
+  fetchCaseTimeline,
   formatINR,
 } from "@/services/api";
 
@@ -54,12 +74,23 @@ export function CaseDetailModal({
   const [analyzingAI, setAnalyzingAI] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Stage 6 Deterministic Recovery Strategy state
+  const [strategyRec, setStrategyRec] = useState<RecoveryStrategyResponse | null>(null);
+  const [analyzingStrategy, setAnalyzingStrategy] = useState<boolean>(false);
+  const [strategyError, setStrategyError] = useState<string | null>(null);
+
+  // Stage 5 Case Timeline state
+  const [timeline, setTimeline] = useState<ActivityItem[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState<boolean>(false);
+
   const loadCase = (id: number) => {
     setLoading(true);
     setError(null);
     setExecError(null);
     setAiRec(null);
     setAiError(null);
+    setStrategyRec(null);
+    setStrategyError(null);
 
     fetchRecoveryCaseDetail(id)
       .then((data) => {
@@ -70,6 +101,19 @@ export function CaseDetailModal({
       })
       .finally(() => {
         setLoading(false);
+      });
+
+    // Fetch Case Timeline
+    setTimelineLoading(true);
+    fetchCaseTimeline(id)
+      .then((items) => {
+        setTimeline(items);
+      })
+      .catch(() => {
+        setTimeline([]);
+      })
+      .finally(() => {
+        setTimelineLoading(false);
       });
   };
 
@@ -90,6 +134,21 @@ export function CaseDetailModal({
       setAiError(err.message || "AI Agent recommendation failed.");
     } finally {
       setAnalyzingAI(false);
+    }
+  };
+
+  const handleRunStrategyAnalysis = async () => {
+    if (!caseId) return;
+    setAnalyzingStrategy(true);
+    setStrategyError(null);
+
+    try {
+      const strat = await fetchRecoveryStrategy(caseId);
+      setStrategyRec(strat);
+    } catch (err: any) {
+      setStrategyError(err.message || "Strategy analysis failed.");
+    } finally {
+      setAnalyzingStrategy(false);
     }
   };
 
@@ -123,6 +182,27 @@ export function CaseDetailModal({
   const activeLinkAction = detail?.recovery_actions?.find(
     (a) => a.action_type === "CREATE_PAYMENT_LINK" && a.status === "EXECUTED" && a.payment_link_url
   );
+
+  const getTimelineConfig = (action: ActionType) => {
+    switch (action) {
+      case "FAILURE_DETECTED":
+        return { icon: AlertTriangle, color: "text-rose-400", bg: "bg-rose-500/20", border: "border-rose-500/30" };
+      case "AI_DIAGNOSED":
+        return { icon: Bot, color: "text-purple-400", bg: "bg-purple-500/20", border: "border-purple-500/30" };
+      case "POLICY_PASSED":
+        return { icon: ShieldCheck, color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" };
+      case "LINK_GENERATED":
+        return { icon: Zap, color: "text-blue-400", bg: "bg-blue-500/20", border: "border-blue-500/30" };
+      case "PAYMENT_CAPTURED":
+        return { icon: CheckCircle2, color: "text-emerald-400", bg: "bg-emerald-500/20", border: "border-emerald-500/30" };
+      case "PAYMENT_PARTIALLY_CAPTURED":
+        return { icon: Clock, color: "text-amber-400", bg: "bg-amber-500/20", border: "border-amber-500/30" };
+      case "CASE_RECOVERED":
+        return { icon: Sparkles, color: "text-emerald-300", bg: "bg-emerald-500/30", border: "border-emerald-500/50" };
+      default:
+        return { icon: Activity, color: "text-slate-400", bg: "bg-slate-700/20", border: "border-slate-700/30" };
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
@@ -317,6 +397,157 @@ export function CaseDetailModal({
                 </div>
               </div>
 
+              {/* STAGE 6: Recommended Recovery Strategy Section */}
+              <div className="rounded-2xl bg-gradient-to-br from-emerald-950/40 via-teal-950/20 to-slate-900 border border-emerald-500/30 p-5 space-y-4 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      <Compass className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center space-x-2">
+                        <span>Recommended Recovery Strategy</span>
+                        {strategyRec && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
+                            Deterministic Policy Engine
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Deterministic operational strategy & safety authorization engine
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleRunStrategyAnalysis}
+                    disabled={analyzingStrategy}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all flex items-center space-x-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50 shrink-0"
+                  >
+                    {analyzingStrategy ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Evaluating strategy rules...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Compass className="h-3.5 w-3.5 text-white" />
+                        <span>{strategyRec ? "Re-Analyze Strategy" : "Analyze Recovery Strategy"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Strategy Error Banner */}
+                {strategyError && (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-center space-x-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>{strategyError}</span>
+                  </div>
+                )}
+
+                {/* Strategy Results Display */}
+                {strategyRec ? (
+                  <div className="space-y-4">
+                    {/* Strategy Banner */}
+                    <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="text-xs text-slate-400 font-medium">Selected Strategy:</span>
+                      <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/20">
+                        {strategyRec.strategy}
+                      </span>
+                    </div>
+
+                    {/* 4-Metric Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Recovery Prob.</div>
+                        <div className="text-lg font-bold text-emerald-400 mt-0.5">
+                          {(strategyRec.recovery_probability * 100).toFixed(0)}%
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Risk Score</div>
+                        <div className="text-lg font-bold text-amber-400 mt-0.5">
+                          {strategyRec.risk_score} / 100
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Confidence</div>
+                        <div className="text-lg font-bold text-indigo-300 mt-0.5">
+                          {(strategyRec.confidence * 100).toFixed(0)}%
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800">
+                        <div className="text-[11px] text-slate-400 font-medium">Human Approval</div>
+                        <div className="mt-1">
+                          <span
+                            className={`text-xs font-bold px-2 py-0.5 rounded flex items-center space-x-1 w-fit ${
+                              strategyRec.requires_human_approval
+                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            }`}
+                          >
+                            {strategyRec.requires_human_approval ? (
+                              <>
+                                <UserCheck className="h-3 w-3 mr-1" />
+                                <span>Required</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="h-3 w-3 mr-1" />
+                                <span>Not Required</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Reason box */}
+                    <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                      <div className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                        <Info className="h-3.5 w-3.5 text-emerald-400" />
+                        <span>Strategy Rationale</span>
+                      </div>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        "{strategyRec.reason}"
+                      </p>
+                    </div>
+
+                    {/* Execution Allowed Pill */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-slate-800/80">
+                      <span className="text-xs text-slate-400">Automated Execution Clearance:</span>
+                      <span
+                        className={`text-xs font-bold px-2.5 py-0.5 rounded flex items-center space-x-1 ${
+                          strategyRec.allowed_to_execute
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                        }`}
+                      >
+                        {strategyRec.allowed_to_execute ? (
+                          <>
+                            <Unlock className="h-3 w-3 mr-1" />
+                            <span>✓ Allowed to Execute</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-3 w-3 mr-1" />
+                            <span>✕ Execution Blocked</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 text-center space-y-1 text-xs text-slate-400">
+                    <p>Click <strong className="text-emerald-300">"Analyze Recovery Strategy"</strong> to run deterministic rules and determine if manual approval or automated retry is required.</p>
+                  </div>
+                )}
+              </div>
+
               {/* STAGE 4: AI Recovery Agent Analysis Console */}
               <div className="rounded-2xl bg-gradient-to-br from-indigo-950/40 via-purple-950/20 to-slate-900 border border-purple-500/30 p-5 space-y-4 shadow-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/20 pb-3">
@@ -472,6 +703,63 @@ export function CaseDetailModal({
                 ) : (
                   <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 text-center space-y-1 text-xs text-slate-400">
                     <p>Click <strong className="text-purple-300">"Analyze with AI"</strong> to generate deep failure diagnostics, behavioral probability scoring, and automated policy verification.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* STAGE 5: Case Recovery Chronological Timeline */}
+              <div className="rounded-2xl bg-slate-800/40 border border-slate-700/60 p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                  <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <History className="h-4 w-4 text-blue-400" />
+                    <span>Case Recovery Timeline</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {timeline.length} Recorded Milestone{timeline.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                {timelineLoading ? (
+                  <div className="py-6 flex items-center justify-center space-y-2 text-slate-400 text-xs">
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-400 mr-2" />
+                    <span>Loading case event stream...</span>
+                  </div>
+                ) : timeline.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic py-2">No timeline events recorded yet.</p>
+                ) : (
+                  <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-700">
+                    {timeline.map((item, idx) => {
+                      const cfg = getTimelineConfig(item.action);
+                      const IconComp = cfg.icon;
+
+                      return (
+                        <div key={item.id || idx} className="relative flex items-start space-x-3 group">
+                          {/* Node Icon */}
+                          <div
+                            className={`absolute -left-6 mt-0.5 p-1 rounded-full ${cfg.bg} ${cfg.color} border ${cfg.border} ring-4 ring-slate-900`}
+                          >
+                            <IconComp className="h-3 w-3" />
+                          </div>
+
+                          {/* Content Card */}
+                          <div className="flex-1 p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-white flex items-center space-x-2">
+                                <span>{item.action.replace(/_/g, " ")}</span>
+                                <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                                  {item.actor}
+                                </span>
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+
+                            <p className="text-xs text-slate-300">{item.summary}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

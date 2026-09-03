@@ -4,6 +4,8 @@ from app.services.recovery_scoring import RecoveryScorer, recovery_scorer
 from app.services.event_ingestion import EventIngestionService, event_ingestion_service
 from app.services.razorpay_client import RazorpayClient, razorpay_client, RazorpayClientError
 from app.services.webhook_processor import WebhookProcessor, webhook_processor, WebhookProcessingError
+from app.services.activity_feed import ActivityFeedService, activity_feed_service
+from app.services.recovery_strategy import RecoveryStrategyEngine, recovery_strategy_engine
 
 __all__ = [
     "EventNormalizer",
@@ -18,4 +20,8 @@ __all__ = [
     "WebhookProcessor",
     "webhook_processor",
     "WebhookProcessingError",
+    "ActivityFeedService",
+    "activity_feed_service",
+    "RecoveryStrategyEngine",
+    "recovery_strategy_engine",
 ]

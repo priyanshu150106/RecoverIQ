@@ -4,6 +4,8 @@ import {
   RecoveryCaseDetail,
   ExecuteLinkResponse,
   AIRecoveryRecommendationResponse,
+  ActivityItem,
+  RecoveryStrategyResponse,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -46,6 +48,28 @@ export async function fetchRecoveryCaseDetail(
   return res.json();
 }
 
+export async function fetchActivityFeed(limit: number = 20): Promise<ActivityItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/dashboard/activity-feed?limit=${limit}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch activity feed: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchCaseTimeline(caseId: number): Promise<ActivityItem[]> {
+  const res = await fetch(`${API_BASE_URL}/api/recovery-cases/${caseId}/timeline`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Failed to fetch case timeline #${caseId}: ${res.status} ${res.statusText}`
+    );
+  }
+  return res.json();
+}
+
 export async function fetchAIRecommendation(
   caseId: number
 ): Promise<AIRecoveryRecommendationResponse> {
@@ -60,6 +84,24 @@ export async function fetchAIRecommendation(
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.detail || `AI analysis failed with HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function fetchRecoveryStrategy(
+  caseId: number
+): Promise<RecoveryStrategyResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/recovery-cases/${caseId}/strategy`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Strategy evaluation failed with HTTP ${res.status}`);
   }
   return data;
 }
@@ -80,6 +122,22 @@ export async function executePaymentLink(
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.detail || `Execution failed with HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function simulateDemoPayment(caseId: number): Promise<any> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/demo/recovery/${caseId}/simulate-payment`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Demo payment simulation failed with HTTP ${res.status}`);
   }
   return data;
 }

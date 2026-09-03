@@ -113,3 +113,52 @@ export interface AIRecoveryRecommendationResponse {
   model_used?: string | null;
   recommendation: AIRecoveryRecommendation;
 }
+
+export type ActorType =
+  | "AI_AGENT"
+  | "POLICY_ENGINE"
+  | "RAZORPAY_EXECUTION"
+  | "WEBHOOK_RECEIVER"
+  | "SYSTEM";
+
+export type ActionType =
+  | "FAILURE_DETECTED"
+  | "AI_DIAGNOSED"
+  | "POLICY_PASSED"
+  | "LINK_GENERATED"
+  | "PAYMENT_CAPTURED"
+  | "PAYMENT_PARTIALLY_CAPTURED"
+  | "PAYMENT_CANCELLED"
+  | "PAYMENT_EXPIRED"
+  | "CASE_RECOVERED"
+  | "RECOVERY_ACTION_FAILED";
+
+export interface ActivityItem {
+  id: string;
+  timestamp: string;
+  actor: ActorType;
+  action: ActionType;
+  summary: string;
+  status: string;
+  case_id?: number | null;
+  amount?: number | null; // in paise
+  metadata?: Record<string, any>;
+}
+
+export type StrategyType =
+  | "SEND_SMART_RETRY_LINK"
+  | "SEND_PAYMENT_LINK"
+  | "SEND_REMINDER"
+  | "NO_ACTION"
+  | "HUMAN_REVIEW";
+
+export interface RecoveryStrategyResponse {
+  recovery_case_id: number;
+  strategy: StrategyType;
+  reason: string;
+  risk_score: number;
+  recovery_probability: number;
+  confidence: number;
+  requires_human_approval: boolean;
+  allowed_to_execute: boolean;
+}

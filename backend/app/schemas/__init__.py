@@ -22,6 +22,15 @@ from app.schemas.ai_recommendation import (
     AIRecoveryRecommendation,
     AIRecoveryRecommendationResponse,
 )
+from app.schemas.activity import (
+    ActivityItem,
+    ActorType,
+    ActionType,
+)
+from app.schemas.recovery_strategy import (
+    StrategyType,
+    RecoveryStrategyResponse,
+)
 from app.schemas.metrics import DashboardMetricsResponse
 
 __all__ = [
@@ -41,5 +50,10 @@ __all__ = [
     "PolicyCheckResult",
     "AIRecoveryRecommendation",
     "AIRecoveryRecommendationResponse",
+    "ActivityItem",
+    "ActorType",
+    "ActionType",
+    "StrategyType",
+    "RecoveryStrategyResponse",
     "DashboardMetricsResponse",
 ]
