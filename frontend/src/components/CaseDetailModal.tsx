@@ -33,6 +33,9 @@ import {
   UserX,
   Lock,
   Unlock,
+  Send,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import {
   RecoveryCaseDetail,
@@ -41,6 +44,7 @@ import {
   ActionType,
   ActorType,
   RecoveryStrategyResponse,
+  RecoveryApprovalResponse,
 } from "@/types/api";
 import {
   fetchRecoveryCaseDetail,
@@ -48,6 +52,11 @@ import {
   fetchAIRecommendation,
   fetchRecoveryStrategy,
   fetchCaseTimeline,
+  requestCaseApproval,
+  fetchCaseApprovals,
+  approveApproval,
+  rejectApproval,
+  executeApprovedAction,
   formatINR,
 } from "@/services/api";
 
@@ -79,6 +88,11 @@ export function CaseDetailModal({
   const [analyzingStrategy, setAnalyzingStrategy] = useState<boolean>(false);
   const [strategyError, setStrategyError] = useState<string | null>(null);
 
+  // Stage 6 Step 2 Human-in-the-Loop Approvals state
+  const [approvals, setApprovals] = useState<RecoveryApprovalResponse[]>([]);
+  const [approvalActionLoading, setApprovalActionLoading] = useState<boolean>(false);
+  const [approvalMsg, setApprovalMsg] = useState<string | null>(null);
+
   // Stage 5 Case Timeline state
   const [timeline, setTimeline] = useState<ActivityItem[]>([]);
   const [timelineLoading, setTimelineLoading] = useState<boolean>(false);
@@ -91,6 +105,7 @@ export function CaseDetailModal({
     setAiError(null);
     setStrategyRec(null);
     setStrategyError(null);
+    setApprovalMsg(null);
 
     fetchRecoveryCaseDetail(id)
       .then((data) => {
@@ -114,6 +129,15 @@ export function CaseDetailModal({
       })
       .finally(() => {
         setTimelineLoading(false);
+      });
+
+    // Fetch Case Approvals
+    fetchCaseApprovals(id)
+      .then((apprs) => {
+        setApprovals(apprs);
+      })
+      .catch(() => {
+        setApprovals([]);
       });
   };
 
@@ -152,6 +176,76 @@ export function CaseDetailModal({
     }
   };
 
+  const handleRequestApproval = async () => {
+    if (!caseId || !strategyRec) return;
+    setApprovalActionLoading(true);
+    setApprovalMsg(null);
+    setExecError(null);
+
+    try {
+      const newAppr = await requestCaseApproval(caseId, strategyRec.strategy, "merchant_operator");
+      setApprovals((prev) => [newAppr, ...prev]);
+      setApprovalMsg(`Approval requested for ${strategyRec.strategy}. Awaiting operator decision.`);
+    } catch (err: any) {
+      setExecError(err.message || "Failed to request approval.");
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
+
+  const handleApprove = async (approvalId: number) => {
+    setApprovalActionLoading(true);
+    setApprovalMsg(null);
+    setExecError(null);
+
+    try {
+      const updated = await approveApproval(approvalId, "merchant_lead", "Approved after risk verification.");
+      setApprovals((prev) => prev.map((a) => (a.id === approvalId ? updated : a)));
+      setApprovalMsg("Strategy APPROVED by operator. Ready for safe execution.");
+      loadCase(caseId!);
+    } catch (err: any) {
+      setExecError(err.message || "Failed to approve.");
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
+
+  const handleReject = async (approvalId: number) => {
+    setApprovalActionLoading(true);
+    setApprovalMsg(null);
+    setExecError(null);
+
+    try {
+      const updated = await rejectApproval(approvalId, "merchant_lead", "Rejected by operator during review.");
+      setApprovals((prev) => prev.map((a) => (a.id === approvalId ? updated : a)));
+      setApprovalMsg("Strategy REJECTED by operator.");
+      loadCase(caseId!);
+    } catch (err: any) {
+      setExecError(err.message || "Failed to reject.");
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
+
+  const handleExecuteApproval = async (approvalId: number) => {
+    setApprovalActionLoading(true);
+    setApprovalMsg(null);
+    setExecError(null);
+
+    try {
+      const res = await executeApprovedAction(approvalId);
+      setApprovalMsg(res.message);
+      loadCase(caseId!);
+      if (onCaseUpdated) {
+        onCaseUpdated();
+      }
+    } catch (err: any) {
+      setExecError(err.message || "Execution failed.");
+    } finally {
+      setApprovalActionLoading(false);
+    }
+  };
+
   const handleGenerateLink = async () => {
     if (!caseId) return;
     setExecuting(true);
@@ -178,10 +272,12 @@ export function CaseDetailModal({
 
   if (!caseId) return null;
 
-  // Check if a payment link has already been executed for this case
+  // Active link check
   const activeLinkAction = detail?.recovery_actions?.find(
-    (a) => a.action_type === "CREATE_PAYMENT_LINK" && a.status === "EXECUTED" && a.payment_link_url
+    (a) => a.action_type === "CREATE_PAYMENT_LINK" || a.action_type === "SEND_SMART_RETRY_LINK" || a.action_type === "SEND_PAYMENT_LINK" && a.status === "EXECUTED" && a.payment_link_url
   );
+
+  const activeApproval = approvals.find((a) => a.status === "PENDING" || a.status === "APPROVED");
 
   const getTimelineConfig = (action: ActionType) => {
     switch (action) {
@@ -235,7 +331,7 @@ export function CaseDetailModal({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">Diagnostic Breakdown & Autonomous Recovery Engine</p>
+              <p className="text-xs text-slate-400">Diagnostic Breakdown & Human-in-the-Loop Recovery Engine</p>
             </div>
           </div>
 
@@ -313,13 +409,23 @@ export function CaseDetailModal({
                 </div>
               )}
 
-              {/* Execution Error Banner */}
+              {/* Execution Error / Success Messages */}
               {execError && (
                 <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs flex items-start space-x-2">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                   <div>
                     <p className="font-semibold">Action Blocked / Failed</p>
                     <p className="mt-0.5 text-slate-300">{execError}</p>
+                  </div>
+                </div>
+              )}
+
+              {approvalMsg && (
+                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs flex items-start space-x-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-400" />
+                  <div>
+                    <p className="font-semibold">Workflow Status</p>
+                    <p className="mt-0.5 text-slate-300">{approvalMsg}</p>
                   </div>
                 </div>
               )}
@@ -397,7 +503,7 @@ export function CaseDetailModal({
                 </div>
               </div>
 
-              {/* STAGE 6: Recommended Recovery Strategy Section */}
+              {/* STAGE 6: Recommended Recovery Strategy & Human-in-the-Loop Approval Console */}
               <div className="rounded-2xl bg-gradient-to-br from-emerald-950/40 via-teal-950/20 to-slate-900 border border-emerald-500/30 p-5 space-y-4 shadow-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-emerald-500/20 pb-3">
                   <div className="flex items-center space-x-2.5">
@@ -406,7 +512,7 @@ export function CaseDetailModal({
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-white flex items-center space-x-2">
-                        <span>Recommended Recovery Strategy</span>
+                        <span>Recommended Recovery Strategy & Approval</span>
                         {strategyRec && (
                           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-300 border-emerald-500/30">
                             Deterministic Policy Engine
@@ -414,7 +520,7 @@ export function CaseDetailModal({
                         )}
                       </h4>
                       <p className="text-[11px] text-slate-400">
-                        Deterministic operational strategy & safety authorization engine
+                        Deterministic strategy recommendation with Human-in-the-Loop authorization
                       </p>
                     </div>
                   </div>
@@ -517,28 +623,80 @@ export function CaseDetailModal({
                       </p>
                     </div>
 
-                    {/* Execution Allowed Pill */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-slate-800/80">
-                      <span className="text-xs text-slate-400">Automated Execution Clearance:</span>
-                      <span
-                        className={`text-xs font-bold px-2.5 py-0.5 rounded flex items-center space-x-1 ${
-                          strategyRec.allowed_to_execute
-                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                            : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                        }`}
-                      >
-                        {strategyRec.allowed_to_execute ? (
-                          <>
-                            <Unlock className="h-3 w-3 mr-1" />
-                            <span>✓ Allowed to Execute</span>
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="h-3 w-3 mr-1" />
-                            <span>✕ Execution Blocked</span>
-                          </>
+                    {/* Human-in-the-Loop Operator Approval Actions */}
+                    <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/20 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-1.5">
+                          <UserCheck className="h-4 w-4 text-emerald-400" />
+                          <span>Human-in-the-Loop Approval Console</span>
+                        </span>
+                        {activeApproval && (
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                              activeApproval.status === "APPROVED"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                : activeApproval.status === "REJECTED"
+                                ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                                : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            }`}
+                          >
+                            Approval #{activeApproval.id}: {activeApproval.status}
+                          </span>
                         )}
-                      </span>
+                      </div>
+
+                      {/* Action buttons depending on approval state */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        {!activeApproval ? (
+                          <button
+                            onClick={handleRequestApproval}
+                            disabled={approvalActionLoading || detail.status === "RECOVERED" || detail.status === "CANCELLED"}
+                            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors flex items-center space-x-2 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                          >
+                            {approvalActionLoading ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                            <span>Request Operator Approval</span>
+                          </button>
+                        ) : activeApproval.status === "PENDING" ? (
+                          <>
+                            <button
+                              onClick={() => handleApprove(activeApproval.id)}
+                              disabled={approvalActionLoading}
+                              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                            >
+                              <ThumbsUp className="h-3.5 w-3.5" />
+                              <span>Approve Strategy</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleReject(activeApproval.id)}
+                              disabled={approvalActionLoading}
+                              className="px-4 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-lg shadow-rose-600/20 disabled:opacity-50"
+                            >
+                              <ThumbsDown className="h-3.5 w-3.5" />
+                              <span>Reject Strategy</span>
+                            </button>
+                          </>
+                        ) : activeApproval.status === "APPROVED" ? (
+                          <button
+                            onClick={() => handleExecuteApproval(activeApproval.id)}
+                            disabled={approvalActionLoading || detail.status === "RECOVERED"}
+                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold text-xs transition-all flex items-center space-x-2 shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                          >
+                            {approvalActionLoading ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Zap className="h-3.5 w-3.5 text-amber-300" />
+                            )}
+                            <span>Execute Approved Recovery Action</span>
+                          </button>
+                        ) : (
+                          <p className="text-xs text-slate-400">Approval decision finalized.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -625,8 +783,8 @@ export function CaseDetailModal({
                               aiRec.recommendation.urgency === "HIGH"
                                 ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                                 : aiRec.recommendation.urgency === "MEDIUM"
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                : "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-blue-500/10 text-blue-400 border-blue-500/20"
                             }`}
                           >
                             {aiRec.recommendation.urgency}
@@ -647,10 +805,10 @@ export function CaseDetailModal({
                           <span
                             className={`text-xs font-bold px-2 py-0.5 rounded flex items-center space-x-1 w-fit ${
                               aiRec.recommendation.policy_recommendation === "ALLOW"
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                                 : aiRec.recommendation.policy_recommendation === "REVIEW"
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                : "bg-rose-500/10 text-rose-400 border-rose-500/20"
                             }`}
                           >
                             <span>
@@ -764,11 +922,11 @@ export function CaseDetailModal({
                 )}
               </div>
 
-              {/* Recommended Action & Stage 3A Execution Trigger */}
+              {/* Direct Test Link Generation Action Trigger (Fallback/Direct) */}
               <div className="rounded-xl bg-gradient-to-r from-blue-950/40 via-indigo-950/40 to-slate-900 border border-blue-800/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">
-                    Execution Trigger
+                    Direct Execution Trigger
                   </span>
                   <p className="text-base font-bold text-white mt-0.5 font-mono">
                     {detail.recommended_action}

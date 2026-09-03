@@ -162,3 +162,35 @@ export interface RecoveryStrategyResponse {
   requires_human_approval: boolean;
   allowed_to_execute: boolean;
 }
+
+export type ApprovalStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "EXECUTED"
+  | "EXPIRED";
+
+export interface RecoveryApprovalResponse {
+  id: number;
+  recovery_case_id: number;
+  strategy_type: string;
+  requested_by: string;
+  approved_by?: string | null;
+  status: ApprovalStatus;
+  reason?: string | null;
+  created_at: string;
+  approved_at?: string | null;
+  rejected_at?: string | null;
+  executed_at?: string | null;
+}
+
+export interface ApprovalExecutionResponse {
+  approval_id: number;
+  recovery_case_id: number;
+  strategy_type: string;
+  status: string;
+  action_id?: number | null;
+  payment_link_id?: string | null;
+  payment_link_url?: string | null;
+  message: string;
+}

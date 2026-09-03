@@ -9,6 +9,7 @@ from app.routes.ai_agent import router as ai_agent_router
 from app.routes.activity import router as activity_router
 from app.routes.demo import router as demo_router
 from app.routes.strategy import router as strategy_router
+from app.routes.recovery_approvals import router as recovery_approvals_router
 
 __all__ = [
     "health_router",
@@ -21,4 +22,5 @@ __all__ = [
     "activity_router",
     "demo_router",
     "strategy_router",
+    "recovery_approvals_router",
 ]

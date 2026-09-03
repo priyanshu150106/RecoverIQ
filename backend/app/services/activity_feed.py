@@ -1,7 +1,7 @@
 """Activity Feed and Case Timeline Aggregation Service.
 
 Extracts, normalizes, and sequences operational and intelligence events from
-existing PaymentEvent, RecoveryAction, and RecoveryCase entities.
+existing PaymentEvent, RecoveryAction, RecoveryApproval, and RecoveryCase entities.
 """
 from datetime import timedelta
 from typing import List, Optional
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.recovery_case import RecoveryCase
 from app.models.payment_event import PaymentEvent
 from app.models.recovery_action import RecoveryAction
+from app.models.recovery_approval import RecoveryApproval
 from app.schemas.activity import ActivityItem
 
 
@@ -98,7 +99,7 @@ class ActivityFeedService:
             case = act.recovery_case
             amt = case.payment_event.amount if (case and case.payment_event) else None
 
-            if act.status == "EXECUTED" and act.action_type == "CREATE_PAYMENT_LINK":
+            if act.status == "EXECUTED" and (act.action_type in ("CREATE_PAYMENT_LINK", "SEND_SMART_RETRY_LINK", "SEND_PAYMENT_LINK")):
                 activities.append(ActivityItem(
                     id=f"act_act_{act.id}",
                     timestamp=act.created_at,
@@ -109,6 +110,18 @@ class ActivityFeedService:
                     case_id=act.recovery_case_id,
                     amount=amt,
                     metadata={"payment_link_id": act.payment_link_id, "payment_link_url": act.payment_link_url}
+                ))
+            elif act.status == "EXECUTED" and act.action_type == "SEND_REMINDER":
+                activities.append(ActivityItem(
+                    id=f"act_act_{act.id}",
+                    timestamp=act.created_at,
+                    actor="POLICY_ENGINE",
+                    action="POLICY_PASSED",
+                    summary=f"Recovery reminder outreach recorded for Case #{act.recovery_case_id}.",
+                    status="EXECUTED",
+                    case_id=act.recovery_case_id,
+                    amount=amt,
+                    metadata={"action_type": "SEND_REMINDER"}
                 ))
             elif act.status == "FAILED":
                 activities.append(ActivityItem(
@@ -185,7 +198,34 @@ class ActivityFeedService:
             metadata={"risk_score": case.risk_score, "recovery_probability": case.recovery_probability, "recommended_action": case.recommended_action}
         ))
 
-        # 3. Actions (Policy check + Execution)
+        # 3. Approvals (Human in the Loop)
+        for appr in case.approvals:
+            if appr.status == "APPROVED" and appr.approved_at:
+                timeline.append(ActivityItem(
+                    id=f"tl_appr_granted_{appr.id}",
+                    timestamp=appr.approved_at,
+                    actor="POLICY_ENGINE",
+                    action="POLICY_PASSED",
+                    summary=f"Merchant operator '{appr.approved_by}' APPROVED strategy {appr.strategy_type}.",
+                    status="APPROVED",
+                    case_id=case.id,
+                    amount=amt,
+                    metadata={"strategy": appr.strategy_type, "approved_by": appr.approved_by}
+                ))
+            elif appr.status == "REJECTED" and appr.rejected_at:
+                timeline.append(ActivityItem(
+                    id=f"tl_appr_rej_{appr.id}",
+                    timestamp=appr.rejected_at,
+                    actor="POLICY_ENGINE",
+                    action="RECOVERY_ACTION_FAILED",
+                    summary=f"Merchant operator '{appr.approved_by}' REJECTED strategy {appr.strategy_type}: {appr.reason}.",
+                    status="REJECTED",
+                    case_id=case.id,
+                    amount=amt,
+                    metadata={"strategy": appr.strategy_type, "reason": appr.reason}
+                ))
+
+        # 4. Actions (Policy check + Execution)
         for act in case.recovery_actions:
             if act.status == "EXECUTED":
                 # Policy Passed
@@ -226,7 +266,7 @@ class ActivityFeedService:
                     metadata={"error_message": act.error_message}
                 ))
 
-        # 4. Related Webhook Payment Events for this customer
+        # 5. Related Webhook Payment Events for this customer
         related_events = (
             db.query(PaymentEvent)
             .filter(
@@ -288,7 +328,7 @@ class ActivityFeedService:
                     metadata={"external_event_id": rev_evt.external_event_id}
                 ))
 
-        # 5. Case Recovered
+        # 6. Case Recovered
         if case.status == "RECOVERED":
             latest_ts = max([a.timestamp for a in timeline]) if timeline else case.created_at
             timeline.append(ActivityItem(

@@ -13,6 +13,7 @@ from app.routes.ai_agent import router as ai_agent_router
 from app.routes.activity import router as activity_router
 from app.routes.demo import router as demo_router
 from app.routes.strategy import router as strategy_router
+from app.routes.recovery_approvals import router as recovery_approvals_router
 
 # Create database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -43,6 +44,7 @@ app.include_router(ai_agent_router)
 app.include_router(activity_router)
 app.include_router(demo_router)
 app.include_router(strategy_router)
+app.include_router(recovery_approvals_router)
 
 
 @app.get("/", tags=["Root"])
@@ -61,6 +63,7 @@ def root():
             "execute_link": "/api/recovery-cases/{case_id}/execute-link",
             "ai_recommendation": "/api/recovery-cases/{case_id}/ai-recommendation",
             "strategy": "/api/recovery-cases/{case_id}/strategy",
+            "approvals": "/api/recovery-cases/{case_id}/approval",
             "demo_simulate_payment": "/api/demo/recovery/{case_id}/simulate-payment",
             "webhooks": "/api/webhooks/razorpay",
             "events_ingestion": "/api/events"

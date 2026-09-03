@@ -6,6 +6,7 @@ from app.services.razorpay_client import RazorpayClient, razorpay_client, Razorp
 from app.services.webhook_processor import WebhookProcessor, webhook_processor, WebhookProcessingError
 from app.services.activity_feed import ActivityFeedService, activity_feed_service
 from app.services.recovery_strategy import RecoveryStrategyEngine, recovery_strategy_engine
+from app.services.recovery_approval import RecoveryApprovalService, recovery_approval_service
 
 __all__ = [
     "EventNormalizer",
@@ -24,4 +25,6 @@ __all__ = [
     "activity_feed_service",
     "RecoveryStrategyEngine",
     "recovery_strategy_engine",
+    "RecoveryApprovalService",
+    "recovery_approval_service",
 ]

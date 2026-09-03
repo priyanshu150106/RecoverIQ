@@ -6,6 +6,8 @@ import {
   AIRecoveryRecommendationResponse,
   ActivityItem,
   RecoveryStrategyResponse,
+  RecoveryApprovalResponse,
+  ApprovalExecutionResponse,
 } from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -102,6 +104,100 @@ export async function fetchRecoveryStrategy(
   const data = await res.json();
   if (!res.ok) {
     throw new Error(data.detail || `Strategy evaluation failed with HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function requestCaseApproval(
+  caseId: number,
+  strategy: string,
+  requestedBy: string = "merchant_operator"
+): Promise<RecoveryApprovalResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/recovery-cases/${caseId}/approval`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strategy, requested_by: requestedBy }),
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Approval request failed with HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function fetchCaseApprovals(
+  caseId: number
+): Promise<RecoveryApprovalResponse[]> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/recovery-cases/${caseId}/approvals`,
+    { cache: "no-store" }
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to fetch approvals: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function approveApproval(
+  approvalId: number,
+  decidedBy: string = "merchant_operator",
+  reason?: string
+): Promise<RecoveryApprovalResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/approvals/${approvalId}/approve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decided_by: decidedBy, reason }),
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Approval failed with HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function rejectApproval(
+  approvalId: number,
+  decidedBy: string = "merchant_operator",
+  reason?: string
+): Promise<RecoveryApprovalResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/approvals/${approvalId}/reject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decided_by: decidedBy, reason }),
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Rejection failed with HTTP ${res.status}`);
+  }
+  return data;
+}
+
+export async function executeApprovedAction(
+  approvalId: number
+): Promise<ApprovalExecutionResponse> {
+  const res = await fetch(
+    `${API_BASE_URL}/api/approvals/${approvalId}/execute`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.detail || `Execution failed with HTTP ${res.status}`);
   }
   return data;
 }
