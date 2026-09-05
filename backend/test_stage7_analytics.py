@@ -34,8 +34,16 @@ from app.services.recovery_outcome import recovery_outcome_service
 
 def get(url, headers=None):
     req = urllib.request.Request(url, headers=headers or {})
-    res = urllib.request.urlopen(req)
-    return res.getcode(), json.loads(res.read().decode()), res.headers
+    try:
+        res = urllib.request.urlopen(req)
+        return res.getcode(), json.loads(res.read().decode()), res.headers
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        try:
+            parsed = json.loads(body)
+        except Exception:
+            parsed = {"detail": body}
+        return e.code, parsed, e.headers
 
 
 def post(url, data=None, headers=None):

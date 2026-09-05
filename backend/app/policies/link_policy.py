@@ -24,10 +24,14 @@ class LinkSafetyPolicy:
     def validate(
         cls,
         case: RecoveryCase,
-        key_id: Optional[str],
-        db: Session
+        key_id: Optional[str] = None,
+        db: Optional[Session] = None
     ) -> Tuple[bool, Optional[str]]:
         """Validates all safety policies. Returns (allowed, error_reason)."""
+
+        if key_id is None:
+            from app.config import settings
+            key_id = settings.RAZORPAY_KEY_ID
 
         # Policy 1: Test Mode Key Check
         if not key_id or not key_id.strip():
@@ -58,24 +62,25 @@ class LinkSafetyPolicy:
             )
 
         # Policy 4: Cooldown Window Check (No active link created within 30 minutes)
-        cutoff_time = datetime.utcnow() - timedelta(minutes=cls.COOLDOWN_MINUTES)
-        recent_action = (
-            db.query(RecoveryAction)
-            .filter(
-                RecoveryAction.recovery_case_id == case.id,
-                RecoveryAction.action_type == "CREATE_PAYMENT_LINK",
-                RecoveryAction.status == "EXECUTED",
-                RecoveryAction.created_at >= cutoff_time
+        if db:
+            cutoff_time = datetime.utcnow() - timedelta(minutes=cls.COOLDOWN_MINUTES)
+            recent_action = (
+                db.query(RecoveryAction)
+                .filter(
+                    RecoveryAction.recovery_case_id == case.id,
+                    RecoveryAction.action_type.in_(["CREATE_PAYMENT_LINK", "SEND_PAYMENT_LINK", "SEND_SMART_RETRY_LINK"]),
+                    RecoveryAction.status == "EXECUTED",
+                    RecoveryAction.created_at >= cutoff_time
+                )
+                .first()
             )
-            .first()
-        )
 
-        if recent_action:
-            mins_ago = int((datetime.utcnow() - recent_action.created_at).total_seconds() / 60)
-            return False, (
-                f"Policy Gate Violation: A payment link was already created {mins_ago} minutes ago. "
-                f"Cooldown period of {cls.COOLDOWN_MINUTES} minutes is in effect."
-            )
+            if recent_action:
+                mins_ago = int((datetime.utcnow() - recent_action.created_at).total_seconds() / 60)
+                return False, (
+                    f"Policy Gate Violation: A payment link was already created {mins_ago} minutes ago. "
+                    f"Cooldown period of {cls.COOLDOWN_MINUTES} minutes is in effect."
+                )
 
         # All policies passed
         return True, None

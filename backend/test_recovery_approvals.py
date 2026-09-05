@@ -68,8 +68,11 @@ def run_tests():
     assert "already exists" in resp_dup.get("detail", "").lower()
 
     # 3. Terminal Case Approval Rejection
-    print("\n[TEST 3] Terminal Case Approval Check on Case #1 (RECOVERED) (Expect 400)")
-    code_term, resp_term = post("http://127.0.0.1:8000/api/recovery-cases/1/approval", {
+    print("\n[TEST 3] Terminal Case Approval Check on RECOVERED Case (Expect 400)")
+    code_cases, cases_list = get("http://127.0.0.1:8000/api/recovery-cases")
+    recovered_case = next((c for c in cases_list if c["status"] == "RECOVERED"), None)
+    target_case_id = recovered_case["id"] if recovered_case else 13
+    code_term, resp_term = post(f"http://127.0.0.1:8000/api/recovery-cases/{target_case_id}/approval", {
         "strategy": "SEND_PAYMENT_LINK",
         "requested_by": "risk_analyst"
     })
